@@ -1,0 +1,364 @@
+/* ── Background ── */
+.login-body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(45,110,62,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Layout ── */
+.login-page {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 480px 1fr;
+  grid-template-rows: 60px 1fr 60px;
+}
+
+/* ── Top bar ── */
+.topbar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+  background: var(--white);
+  border-bottom: 2px solid var(--green);
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+.topbar-brand {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green-deep);
+}
+
+/* ── Left column ── */
+.col-left {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 40px 60px;
+}
+
+.side-text {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+
+/* ── Center card ── */
+.card-col {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.card {
+  width: 100%;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-top: 3px solid var(--green);
+  box-shadow:
+    0 0 0 1px rgba(45,110,62,0.04),
+    0 20px 60px var(--shadow),
+    0 4px 16px rgba(45,110,62,0.07);
+  animation: cardIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Card header ── */
+.card-header {
+  padding: 40px 44px 32px;
+  border-bottom: 1px solid var(--mist);
+  background: linear-gradient(to bottom, #fafcfa, var(--white));
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.logo-mark {
+  width: 38px; height: 38px;
+  border: 1.5px solid var(--green);
+  background: var(--green-dark);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.logo-mark::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(74,179,104,0.25);
+}
+
+.logo-mark svg {
+  width: 18px; height: 18px;
+  fill: none;
+  stroke: var(--accent-light);
+  stroke-width: 1.5;
+}
+
+.logo-text {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green-deep);
+}
+
+.logo-sub {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 8.5px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--mid);
+  margin-top: 2px;
+}
+
+.card-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 500;
+  font-size: 30px;
+  color: var(--green-deep);
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  margin-bottom: 6px;
+}
+
+.card-subtitle {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  color: var(--mid);
+}
+
+/* ── Card body ── */
+.card-body { padding: 36px 44px 40px; }
+
+.form-group { margin-bottom: 22px; }
+
+.form-label {
+  display: block;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 9px;
+}
+
+.input-wrap { position: relative; }
+
+.input-icon {
+  position: absolute;
+  left: 14px; top: 50%;
+  transform: translateY(-50%);
+  width: 14px; height: 14px;
+  stroke: var(--mid);
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+  transition: stroke 0.2s;
+}
+
+.form-input {
+  width: 100%;
+  background: var(--off-white);
+  border: 1px solid var(--pale);
+  border-bottom-color: var(--border-mid);
+  color: var(--green-ink);
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  padding: 12px 14px 12px 40px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.form-input::placeholder { color: var(--mid); }
+
+.form-input:focus {
+  background: var(--white);
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(45,110,62,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+.form-input:focus + .input-icon { stroke: var(--green); }
+
+/* ── Row between ── */
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 26px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: var(--mid);
+}
+
+.checkbox-label input[type="checkbox"] { display: none; }
+
+.checkbox-box {
+  width: 14px; height: 14px;
+  border: 1px solid var(--pale);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--off-white);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.checkbox-box.checked {
+  border-color: var(--green);
+  background: rgba(45,110,62,0.1);
+}
+
+.checkbox-dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+}
+
+.forgot-link {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: var(--mid);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+  transition: color 0.2s, border-color 0.2s;
+}
+.forgot-link:hover { color: var(--green); border-color: var(--border-mid); }
+
+/* ── Error message ── */
+.error-msg {
+  background: var(--red-bg);
+  border: 1px solid rgba(163,48,48,0.2);
+  color: var(--red);
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  letter-spacing: 0.02em;
+}
+
+.access-note {
+  background: rgba(45,110,62,0.06);
+  border: 1px solid rgba(45,110,62,0.14);
+  color: var(--green-deep);
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  letter-spacing: 0.02em;
+}
+
+.access-note code {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 11px;
+  color: var(--green);
+}
+
+/* ── Submit button ── */
+.btn-primary {
+  width: 100%;
+  padding: 13px 24px;
+  background: var(--green);
+  color: var(--white);
+  border: none;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.2s;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 0.5s;
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--accent); }
+.btn-primary:hover:not(:disabled)::before { left: 100%; }
+.btn-primary:active:not(:disabled) { background: var(--green-deep); }
+.btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* ── Bottom bar ── */
+.bottombar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 48px;
+  border-top: 1px solid var(--mist);
+  background: var(--white);
+}
+
+.bottombar-left {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--mid);
+  text-transform: uppercase;
+  justify-self: start;
+}
+
+.bottombar-center {
+  display: flex;
+  gap: 28px;
+}
+
+.bottombar-center a {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--mid);
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.bottombar-center a:hover { color: var(--green); }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .login-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: 60px auto 1fr 60px;
+  }
+  .col-left { display: none; }
+  .card-col { grid-column: 1; grid-row: 3; padding: 20px; }
+  .bottombar { grid-row: 4; }
+}

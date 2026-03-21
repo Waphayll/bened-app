@@ -1,0 +1,48 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --white:        #ffffff;
+  --off-white:    #f4f7f4;
+  --mist:         #e8efe8;
+  --pale:         #d0ddd0;
+  --mid:          #8aab8a;
+  --green-mid:    #3a8f50;
+  --green:        #2d6e3e;
+  --green-deep:   #1e4d2b;
+  --green-dark:   #122d19;
+  --green-ink:    #0b1e10;
+  --accent:       #3a8f50;
+  --accent-light: #4db368;
+  --amber:        #b07d2a;
+  --amber-bg:     #fdf6ec;
+  --red:          #a33030;
+  --red-bg:       #fdf0f0;
+  --border:       rgba(45,110,62,0.13);
+  --border-light: rgba(45,110,62,0.15);
+  --border-mid:   rgba(45,110,62,0.3);
+  --shadow:       rgba(11,30,16,0.18);
+  --shadow-sm:    0 1px 4px rgba(11,30,16,0.07);
+  --shadow-md:    0 4px 20px rgba(11,30,16,0.09);
+}
+
+html, body {
+  height: 100%;
+  background: var(--off-white);
+  color: var(--green-ink);
+  font-family: 'EB Garamond', Georgia, serif;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
