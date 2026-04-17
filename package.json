@@ -9,6 +9,7 @@
     "preview": "node ./node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {
+    "appwrite": "^24.1.1",
     "chart.js": "^4.4.1",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",

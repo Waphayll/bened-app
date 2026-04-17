@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
-import { TEMP_PASSWORD, authenticateTemporaryUser } from '../lib/tempAuth';
 import '../styles/Login.css';
 
 const LogoMark = () => (
@@ -17,7 +16,7 @@ const LogoMark = () => (
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isConfigured, authError } = useAuth();
 
   const [email,     setEmail]     = useState('');
   const [password,  setPassword]  = useState('');
@@ -25,7 +24,7 @@ export default function Login() {
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e?.preventDefault();
     setError('');
 
@@ -34,17 +33,22 @@ export default function Login() {
       return;
     }
 
-    setLoading(true);
-    const result = authenticateTemporaryUser(email, password);
-
-    if (!result.ok) {
-      setError(result.message);
-      setLoading(false);
+    if (!isConfigured) {
+      setError(
+        'Appwrite is not configured yet. Add VITE_APPWRITE_ENDPOINT and VITE_APPWRITE_PROJECT_ID.',
+      );
       return;
     }
 
-    login(result.user, { remember });
-    navigate('/dashboard');
+    setLoading(true);
+    try {
+      await login(email.trim(), password);
+      navigate('/dashboard');
+    } catch (loginError) {
+      setError(loginError?.message || 'Unable to sign in. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,17 +78,16 @@ export default function Login() {
             </div>
             <div className="card-title">Employee Sign-In</div>
             <div className="card-subtitle">
-              Temporary local access is enabled for this build.
+              Authenticate with your Appwrite email and password.
             </div>
           </div>
 
           <div className="card-body">
 
             {error && <div className="error-msg">{error}</div>}
+            {!error && authError && <div className="error-msg">{authError}</div>}
             <div className="access-note">
-              Use any valid email address and the temporary password
-              {' '}
-              <code>{TEMP_PASSWORD}</code>.
+              This portal now uses Appwrite session authentication.
             </div>
 
             {/* Email */}
@@ -143,7 +146,7 @@ export default function Login() {
                 </span>
                 Keep me signed in
               </label>
-              <span className="forgot-link">Shared temporary password</span>
+              <span className="forgot-link">Managed by Appwrite Auth</span>
             </div>
 
             {/* Submit */}
