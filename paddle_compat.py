@@ -8,6 +8,12 @@ import types
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "huggingface")
 
+# Force CPU-only mode — prevents CUDA illegal-memory-access crashes (error 700)
+# when the GPU driver is in a bad state or the device is not fully supported.
+os.environ["CUDA_VISIBLE_DEVICES"] = ""           # hide all GPUs from CUDA
+os.environ["FLAGS_use_cuda"] = "0"                # Paddle internal flag
+os.environ.setdefault("PADDLE_OCR_USE_GPU", "0")  # PaddleOCR convenience flag
+
 _MODELSCOPE_STUB_REASON = None
 
 

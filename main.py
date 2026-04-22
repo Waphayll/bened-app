@@ -1,5 +1,7 @@
 import base64
+import json
 import re
+import threading
 from difflib import SequenceMatcher
 
 import cv2
@@ -1229,3 +1231,146 @@ async def extract_receipt(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Receipt extraction failed: {exc}") from exc
+
+
+def token_set(text):
+    return set(re.sub(r"[^a-z0-9]+", " ", str(text).lower()).split())
+
+
+def _precompute_masterlist_index(masterlist_rows):
+    """Pre-normalize masterlist names and build token sets for fast matching."""
+    indexed = []
+    for row in masterlist_rows:
+        ml_name = row.get("itemName", "")
+        ml_unit = normalize_receipt_unit(row.get("unit", ""))
+        ml_desc = row.get("itemDesc", "")
+        norm_name = normalize_text(ml_name)
+        name_tokens = token_set(ml_name)
+        desc_tokens = token_set(ml_desc) if ml_desc else set()
+        indexed.append({
+            "row": row,
+            "norm_name": norm_name,
+            "name_tokens": name_tokens,
+            "desc_tokens": desc_tokens,
+            "ml_unit": ml_unit,
+        })
+    return indexed
+
+
+def match_items_to_masterlist(ocr_items, masterlist_rows):
+    """
+    Enrich each OCR item with the best-matching masterlist row.
+    """
+    indexed = _precompute_masterlist_index(masterlist_rows)
+
+    enriched = []
+    for item in ocr_items:
+        best_row = None
+        best_meta = {"score": 0.0, "name_score": 0.0, "desc_score": 0.0, "unit_match": None}
+
+        product_name = item.get("product_name", "")
+        product_tokens = token_set(product_name)
+        ocr_unit = normalize_receipt_unit(item.get("unit") or "")
+
+        for entry in indexed:
+            row = entry["row"]
+
+            # ── Cheap pre-filter: skip if no token overlap at all ────────
+            if product_tokens and entry["name_tokens"]:
+                overlap = len(product_tokens & entry["name_tokens"])
+                if overlap == 0 and not entry["desc_tokens"].intersection(product_tokens):
+                    continue
+
+            meta = score_item_against_masterlist(item, row)
+            if meta["score"] > best_meta["score"]:
+                best_meta = meta
+                best_row = row
+
+            if best_meta["score"] >= 0.85:
+                break
+
+        result = dict(item)
+
+        # Assuming MASTERLIST_MATCH_THRESHOLD is defined earlier, else use 0.40
+        if best_row and best_meta["score"] >= 0.40:
+            result.update(
+                matched_item=best_row.get("itemName", ""),
+                matched_type=best_row.get("itemType", ""),
+                matched_unit=best_row.get("unit", ""),
+                matched_desc=best_row.get("itemDesc", ""),
+                matched_price=best_row.get("defaultPrice"),
+                match_score=best_meta["score"],
+                name_score=best_meta["name_score"],
+                unit_match=best_meta["unit_match"],
+            )
+        else:
+            result.update(
+                matched_item=None,
+                matched_type=None,
+                matched_unit=None,
+                matched_desc=None,
+                matched_price=None,
+                match_score=0.0,
+                name_score=0.0,
+                unit_match=None,
+            )
+
+        enriched.append(result)
+
+    return enriched
+
+
+@app.post("/match-receipt")
+async def match_receipt(
+    file: UploadFile = File(...),
+    masterlist: str = Form(default="[]"),
+):
+    content_type = (file.content_type or "").lower().strip()
+    if not IMAGE_CONTENT_TYPE_RE.match(content_type):
+        raise HTTPException(status_code=400, detail="Only image uploads are allowed.")
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+
+    try:
+        masterlist_rows = json.loads(masterlist)
+        if not isinstance(masterlist_rows, list):
+            masterlist_rows = []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        masterlist_rows = []
+
+    try:
+        lines = ocr_receipt_lines(image_bytes)
+        extracted_text = "\n".join(line["text"] for line in lines)
+        parsed_items = extract_receipt_items(lines)
+        total_amount = detect_receipt_total(lines)
+
+        matched_items = (
+            match_items_to_masterlist(parsed_items, masterlist_rows)
+            if masterlist_rows
+            else parsed_items
+        )
+
+        return {
+            "text": extracted_text,
+            "items": matched_items,
+            "total_amount": total_amount,
+            "line_count": len(lines),
+            "masterlist_size": len(masterlist_rows),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Receipt extraction failed: {exc}") from exc
+
+
+# ── Background OCR engine warmup ─────────────────────────────────────────────
+def _warmup_ocr_engine():
+    try:
+        load_ocr_engine()
+        print("[PaddleOCR] Engine warmed up successfully.")
+    except Exception as exc:
+        print(f"[PaddleOCR] Warmup failed (will retry on first request): {exc}")
+
+threading.Thread(target=_warmup_ocr_engine, daemon=True).start()
