@@ -2,7 +2,7 @@
 OCR Studio — Tkinter + OpenCV + PaddleOCR + Fuzzy Matching
 ==========================================================
 Dependencies:
-    pip install paddlepaddle paddleocr opencv-python pdf2image Pillow thefuzz python-Levenshtein
+    pip install rapidocr_onnxruntime opencv-python pdf2image Pillow thefuzz python-Levenshtein
     optional: pip install wordfreq   (for built-in English dictionary fuzzy matching)
     apt install poppler-utils  (for pdf2image on Linux)
 
@@ -25,7 +25,6 @@ import cv2
 import numpy as np
 from PIL import Image, ImageGrab, ImageTk
 from pdf2image import convert_from_path
-from paddle_compat import get_modelscope_stub_reason, load_paddleocr_class
 
 # ── Fuzzy matching ──────────────────────────────────────────────────────────
 try:
@@ -46,277 +45,40 @@ _ENGLISH_WORD_SET = None
 _ENGLISH_WORD_BUCKETS = None
 FUZZY_TOKEN_OR_SEPARATOR_RE = re.compile(r"[A-Za-z']+|[^A-Za-z']+")
 
-# ── PaddleOCR ───────────────────────────────────────────────────────────────
-PADDLE_AVAILABLE = False
+# ── RapidOCR ────────────────────────────────────────────────────────────────
+RAPIDOCR_AVAILABLE = False
 ocr_engine = None
 ocr_load_error = None
 
 
-def _build_paddle_ocr_engine():
-    PaddleOCR = load_paddleocr_class()
-    init_variants = [
-        {"lang": "en", "use_textline_orientation": False},
-        {"lang": "en", "use_textline_orientation": True},
-        {"lang": "en"},
-        {"lang": "en", "use_angle_cls": False},
-        {"lang": "en", "use_angle_cls": True},
-        {},
-    ]
-    last_error = None
-    for kwargs in init_variants:
-        try:
-            return PaddleOCR(**kwargs)
-        except Exception as exc:
-            last_error = exc
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("PaddleOCR initialization failed with no usable configuration.")
-
-
-def _is_bbox_candidate(value) -> bool:
-    try:
-        arr = np.asarray(value, dtype=np.float32)
-    except Exception:
-        return False
-    if arr.ndim == 2 and arr.shape[0] >= 4 and arr.shape[1] >= 2:
-        return True
-    return arr.ndim == 1 and arr.size in (4, 8)
-
-
-def _normalize_bbox_points(raw_bbox) -> list[list[int]]:
-    arr = np.asarray(raw_bbox, dtype=np.float32)
-    if arr.ndim == 1:
-        if arr.size == 4:
-            x, y, width, height = arr.tolist()
-            arr = np.array(
-                [
-                    [x, y],
-                    [x + width, y],
-                    [x + width, y + height],
-                    [x, y + height],
-                ],
-                dtype=np.float32,
-            )
-        elif arr.size >= 8:
-            arr = arr[:8].reshape(4, 2)
-        else:
-            raise ValueError("Unexpected bbox format")
-    elif arr.ndim == 2:
-        if arr.shape[0] >= 4 and arr.shape[1] >= 2:
-            arr = arr[:4, :2]
-        else:
-            raise ValueError("Unexpected bbox format")
-    else:
-        raise ValueError("Unexpected bbox format")
-    return [[int(round(point[0])), int(round(point[1]))] for point in arr]
-
-
-def _to_sequence(value):
-    if isinstance(value, np.ndarray):
-        if value.ndim == 0:
-            return [value.item()]
-        return list(value)
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    return None
-
-
-def _first_present_value(mapping, *keys):
-    for key in keys:
-        value = mapping.get(key)
-        if value is not None:
-            return value
-    return None
-
-
-def _coerce_paddle_result_node(node):
-    if isinstance(node, dict):
-        return node
-
-    if hasattr(node, "to_dict") and callable(node.to_dict):
-        try:
-            converted = node.to_dict()
-            if isinstance(converted, dict):
-                return converted
-        except Exception:
-            pass
-
-    extracted = {}
-    for key in (
-        "dt_polys",
-        "rec_polys",
-        "polys",
-        "boxes",
-        "dt_boxes",
-        "rec_texts",
-        "texts",
-        "rec_scores",
-        "scores",
-        "bbox",
-        "points",
-        "box",
-        "text",
-        "transcription",
-        "rec_text",
-        "score",
-        "confidence",
-        "rec_score",
-        "result",
-        "results",
-        "res",
-        "data",
-    ):
-        if hasattr(node, key):
-            try:
-                extracted[key] = getattr(node, key)
-            except Exception:
-                continue
-
-    if extracted:
-        return extracted
-
-    if hasattr(node, "__dict__"):
-        try:
-            extracted = vars(node)
-            if isinstance(extracted, dict):
-                return extracted
-        except Exception:
-            pass
-
-    return None
-
-
-def _iter_paddle_line_candidates(node):
-    if node is None:
-        return
-
-    # PaddleOCR v3 often returns custom result objects instead of plain dicts.
-    if not isinstance(node, (dict, list, tuple, np.ndarray)):
-        coerced = _coerce_paddle_result_node(node)
-        if coerced is not None:
-            node = coerced
-
-    if isinstance(node, np.ndarray):
-        if node.ndim == 0:
-            yield from _iter_paddle_line_candidates(node.item())
-            return
-        for child in node.tolist() if node.dtype == object else list(node):
-            yield from _iter_paddle_line_candidates(child)
-        return
-
-    if isinstance(node, dict):
-        polys = None
-        for key in ("dt_polys", "rec_polys", "polys", "boxes", "dt_boxes"):
-            value = node.get(key)
-            if value is not None:
-                polys = value
-                break
-
-        texts = None
-        for key in ("rec_texts", "texts"):
-            value = node.get(key)
-            if value is not None:
-                texts = value
-                break
-
-        scores = None
-        for key in ("rec_scores", "scores"):
-            value = node.get(key)
-            if value is not None:
-                scores = value
-                break
-
-        text_items = _to_sequence(texts)
-        poly_items = _to_sequence(polys)
-        score_items = _to_sequence(scores)
-
-        if text_items is not None and poly_items is not None:
-            count = min(len(text_items), len(poly_items))
-            for index in range(count):
-                confidence = score_items[index] if score_items is not None and index < len(score_items) else 0.0
-                yield (poly_items[index], text_items[index], confidence)
-
-        bbox = _first_present_value(node, "bbox", "points", "box")
-        text = _first_present_value(node, "text", "transcription", "rec_text")
-        confidence = node.get("score", node.get("confidence", node.get("rec_score", 0.0)))
-        if bbox is not None and text is not None:
-            yield (bbox, text, confidence)
-
-        for key in ("result", "results", "res", "data"):
-            child = node.get(key)
-            if child is not None:
-                yield from _iter_paddle_line_candidates(child)
-        return
-
-    if isinstance(node, (list, tuple)):
-        if len(node) >= 2 and _is_bbox_candidate(node[0]):
-            text_candidate = node[1]
-            text = ""
-            confidence = 0.0
-
-            if isinstance(text_candidate, (list, tuple)):
-                if len(text_candidate) >= 1:
-                    text = str(text_candidate[0] or "")
-                if len(text_candidate) >= 2:
-                    try:
-                        confidence = float(text_candidate[1])
-                    except Exception:
-                        confidence = 0.0
-            elif isinstance(text_candidate, dict):
-                text = str(text_candidate.get("text") or text_candidate.get("rec_text") or "")
-                try:
-                    confidence = float(
-                        text_candidate.get(
-                            "score",
-                            text_candidate.get("confidence", text_candidate.get("rec_score", 0.0)),
-                        )
-                    )
-                except Exception:
-                    confidence = 0.0
-            else:
-                text = str(text_candidate or "")
-
-            yield (node[0], text, confidence)
-            return
-
-        for child in node:
-            yield from _iter_paddle_line_candidates(child)
-        return
-
-    if hasattr(node, "__iter__") and not isinstance(node, (str, bytes, np.ndarray)):
-        for child in node:
-            yield from _iter_paddle_line_candidates(child)
+def _build_rapidocr_engine():
+    from rapidocr_onnxruntime import RapidOCR
+    return RapidOCR()
 
 
 class OCREngineUnavailable(RuntimeError):
-    """Raised when OCR is requested but PaddleOCR is unavailable."""
+    """Raised when OCR is requested but RapidOCR is unavailable."""
 
 def load_ocr_engine():
-    """Lazy-load PaddleOCR in a background thread."""
-    global ocr_engine, PADDLE_AVAILABLE, ocr_load_error
+    """Lazy-load RapidOCR in a background thread."""
+    global ocr_engine, RAPIDOCR_AVAILABLE, ocr_load_error
     if ocr_engine is not None:
         return ocr_engine
     try:
-        ocr_engine = _build_paddle_ocr_engine()
-        PADDLE_AVAILABLE = True
+        ocr_engine = _build_rapidocr_engine()
+        RAPIDOCR_AVAILABLE = True
         ocr_load_error = None
-        workaround_reason = get_modelscope_stub_reason()
-        if workaround_reason:
-            print(
-                "[PaddleOCR] Compatibility mode enabled: "
-                f"ModelScope import skipped ({workaround_reason})"
-            )
     except Exception as e:
-        PADDLE_AVAILABLE = False
+        RAPIDOCR_AVAILABLE = False
         ocr_load_error = str(e)
-        print(f"[PaddleOCR] Could not load: {e}")
+        print(f"[RapidOCR] Could not load: {e}")
     return ocr_engine
 
 
 def require_ocr_engine():
     engine = load_ocr_engine()
-    if not PADDLE_AVAILABLE or engine is None:
-        reason = ocr_load_error or "PaddleOCR could not be initialized."
+    if not RAPIDOCR_AVAILABLE or engine is None:
+        reason = ocr_load_error or "RapidOCR could not be initialized."
         raise OCREngineUnavailable(f"OCR engine unavailable: {reason}")
     return engine
 
@@ -575,57 +337,34 @@ def _grab_clipboard_payload():
 #  OCR HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
 
-def run_paddle_ocr(image: np.ndarray) -> list[dict]:
-    """Run PaddleOCR; return list of {text, conf, bbox}."""
+def run_rapidocr(image: np.ndarray) -> list[dict]:
+    """Run RapidOCR; return list of {text, conf, bbox}."""
     engine = require_ocr_engine()
-    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    if rgb.dtype != np.uint8:
-        rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+    
+    # RapidOCR works well with BGR which is cv2 default
+    bgr = image
+    if bgr.dtype != np.uint8:
+        bgr = np.clip(bgr, 0, 255).astype(np.uint8)
 
-    errors = []
-    result = None
+    try:
+        result, _ = engine(bgr)
+    except Exception as exc:
+        raise exc
 
-    predict_fn = getattr(engine, "predict", None)
-    if callable(predict_fn):
-        for payload in (rgb, [rgb]):
-            try:
-                result = predict_fn(payload)
-                if result is None:
-                    continue
-                if not isinstance(result, (list, tuple, dict, np.ndarray)):
-                    try:
-                        result = list(result)
-                    except Exception:
-                        pass
-                break
-            except Exception as exc:
-                errors.append(exc)
-
-    if result is None:
-        ocr_fn = getattr(engine, "ocr", None)
-        if callable(ocr_fn):
-            for kwargs in ({}, {"cls": False}, {"cls": True}):
-                try:
-                    result = ocr_fn(rgb, **kwargs)
-                    if result is not None:
-                        break
-                except Exception as exc:
-                    errors.append(exc)
-
-    if result is None and errors:
-        raise errors[-1]
+    if not result:
+        return []
 
     items = []
-    for raw_bbox, raw_text, raw_conf in _iter_paddle_line_candidates(result):
-        text = str(raw_text or "").strip()
+    for dt_box, rec_text, score in result:
+        text = str(rec_text or "").strip()
         if not text:
             continue
         try:
-            bbox = _normalize_bbox_points(raw_bbox)
+            bbox = [[int(round(pt[0])), int(round(pt[1]))] for pt in dt_box]
         except Exception:
             continue
         try:
-            conf = float(raw_conf or 0.0)
+            conf = float(score or 0.0)
         except Exception:
             conf = 0.0
         if conf > 1.0:
@@ -655,7 +394,7 @@ def detect_lines_ocr(image: np.ndarray) -> list[dict]:
         x1 = max(0, x - pad)
         x2 = min(image.shape[1], x + w + pad)
         roi = image[y1:y2, x1:x2]
-        results = run_paddle_ocr(roi)
+        results = run_rapidocr(roi)
         for r in results:
             if r["bbox"] is not None:
                 # Adjust bbox back to full-image coords
@@ -901,7 +640,7 @@ class OCRStudio(tk.Tk):
     # ── Init ────────────────────────────────────────────────────────────────
     def __init__(self):
         super().__init__()
-        self.title("OCR Studio  •  OpenCV + PaddleOCR")
+        self.title("OCR Studio  •  OpenCV + RapidOCR")
         self.configure(bg=BG)
         self.geometry("1400x860")
         self.minsize(1100, 700)
@@ -948,7 +687,7 @@ class OCRStudio(tk.Tk):
 
     # ── Background OCR loader ────────────────────────────────────────────────
     def _start_ocr_loader(self):
-        self._set_status("Loading PaddleOCR model…", WARN)
+        self._set_status("Loading RapidOCR model…", WARN)
         threading.Thread(target=self._ocr_loader_thread, daemon=True).start()
 
     def _ocr_loader_thread(self):
@@ -956,11 +695,11 @@ class OCRStudio(tk.Tk):
         self.after(0, self._ocr_loaded_callback)
 
     def _ocr_loaded_callback(self):
-        if PADDLE_AVAILABLE:
-            self._set_status("PaddleOCR ready ✓", SUCCESS)
+        if RAPIDOCR_AVAILABLE:
+            self._set_status("RapidOCR ready ✓", SUCCESS)
             self.btn_ocr.configure(state="normal")
         else:
-            self._set_status("PaddleOCR failed to load — check console", DANGER)
+            self._set_status("RapidOCR failed to load — check console", DANGER)
 
     # ── Menu ─────────────────────────────────────────────────────────────────
     def _build_menu(self):
@@ -1574,7 +1313,7 @@ class OCRStudio(tk.Tk):
             if mode == "lines":
                 results = detect_lines_ocr(img)
             else:
-                results = run_paddle_ocr(img)
+                results = run_rapidocr(img)
             self.after(0, lambda: self._ocr_done(results))
         except Exception as e:
             self.after(0, lambda: self._ocr_error(str(e)))
@@ -1681,12 +1420,11 @@ class OCRStudio(tk.Tk):
 #  Entry point
 # ═══════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    # Suppress paddle/numpy noise
+    # Suppress numpy noise
     import warnings, logging
     warnings.filterwarnings("ignore")
     logging.disable(logging.CRITICAL)
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-    os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
     app = OCRStudio()
     app.mainloop()

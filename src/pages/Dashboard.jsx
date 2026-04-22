@@ -137,17 +137,17 @@ function formatDateValue(value) {
   const hasTime = /T|\d:\d/.test(rawValue);
   return hasTime
     ? parsed.toLocaleString('en-PH', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
     : parsed.toLocaleDateString('en-PH', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
 }
 
 function normalizeLookup(value) {
@@ -1088,35 +1088,35 @@ function deriveInventoryTableRows(masterlistRows, inventoryRows) {
 
   const resolvedRows = masterlistRows.length > 0
     ? masterlistRows.map((row) => {
-        const inventoryMatch = resolveInventoryMatch(
-          lookups,
-          row.itemType,
-          row.itemName,
-          row.itemDesc,
-          row.unit,
-          row.brand,
-        );
+      const inventoryMatch = resolveInventoryMatch(
+        lookups,
+        row.itemType,
+        row.itemName,
+        row.itemDesc,
+        row.unit,
+        row.brand,
+      );
 
-        const currentInv = Number.isFinite(inventoryMatch?.currentInv) ? inventoryMatch.currentInv : null;
-        const maximumInv = Number.isFinite(inventoryMatch?.maximumInv) ? inventoryMatch.maximumInv : null;
+      const currentInv = Number.isFinite(inventoryMatch?.currentInv) ? inventoryMatch.currentInv : null;
+      const maximumInv = Number.isFinite(inventoryMatch?.maximumInv) ? inventoryMatch.maximumInv : null;
 
-        return {
-          ...row,
-          currentInv,
-          maximumInv,
-        };
-      })
+      return {
+        ...row,
+        currentInv,
+        maximumInv,
+      };
+    })
     : inventoryRows.map((row) => ({
-        itemType: row.category,
-        itemName: row.itemName,
-        unit: row.unit || '',
-        itemDesc: row.itemDesc || '',
-        brand: row.brand || '',
-        defaultPrice: null,
-        measurement: '',
-        currentInv: row.currentInv,
-        maximumInv: row.maximumInv,
-      }));
+      itemType: row.category,
+      itemName: row.itemName,
+      unit: row.unit || '',
+      itemDesc: row.itemDesc || '',
+      brand: row.brand || '',
+      defaultPrice: null,
+      measurement: '',
+      currentInv: row.currentInv,
+      maximumInv: row.maximumInv,
+    }));
 
   return resolvedRows
     .map((row) => ({
@@ -1142,7 +1142,7 @@ function tokenOverlapScore(a, b) {
   if (setA.size === 0 || setB.size === 0) return 0;
   let overlap = 0;
   for (const t of setA) { if (setB.has(t)) overlap++; }
-  
+
   // We divide by setB.size to measure "how much of the masterlist item is contained in the OCR text".
   // This prevents long OCR lines from diluting the score.
   // We also add a small bonus (0.01 per token) to favor longer, more specific matches.
@@ -1155,7 +1155,7 @@ function levenshtein(a, b) {
   if (la === 0) return lb;
   if (lb === 0) return la;
   // Ensure b is the shorter string to minimise row allocation
-  if (la < lb) { [a, b] = [b, a]; [la, lb] = [lb, la]; }
+  if (la < lb) { [a, b] = [b, a];[la, lb] = [lb, la]; }
   let prev = new Uint16Array(lb + 1);
   let curr = new Uint16Array(lb + 1);
   for (let j = 0; j <= lb; j++) prev[j] = j;
@@ -1187,7 +1187,7 @@ function levenshteinSim(a, b) {
  * Used to render inline highlights showing what the OCR got wrong.
  */
 function charDiff(ocrText, masterText) {
-  const a = (ocrText  || '').toUpperCase();
+  const a = (ocrText || '').toUpperCase();
   const b = (masterText || '').toUpperCase();
   const la = a.length, lb = b.length;
 
@@ -1195,18 +1195,18 @@ function charDiff(ocrText, masterText) {
   const dp = Array.from({ length: la + 1 }, () => new Uint16Array(lb + 1));
   for (let i = 1; i <= la; i++)
     for (let j = 1; j <= lb; j++)
-      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
 
   // Traceback
   const ops = [];
   let i = la, j = lb;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && a[i-1] === b[j-1]) {
-      ops.push({ ch: b[j-1], type: 'match' }); i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
-      ops.push({ ch: b[j-1], type: 'insert' }); j--;
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+      ops.push({ ch: b[j - 1], type: 'match' }); i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      ops.push({ ch: b[j - 1], type: 'insert' }); j--;
     } else {
-      ops.push({ ch: a[i-1], type: 'delete' }); i--;
+      ops.push({ ch: a[i - 1], type: 'delete' }); i--;
     }
   }
   ops.reverse();
@@ -1295,10 +1295,10 @@ function scoreItemAgainstRow(productName, ocrUnit, row) {
   }
 
   return {
-    score:     Math.max(0, nameScore + descScore + unitBonus),
+    score: Math.max(0, nameScore + descScore + unitBonus),
     nameScore: Math.round(nameScore * 100),
-    levSim:    Math.round(levSim    * 100),
-    tokSim:    Math.round(compositeTokSim * 100),
+    levSim: Math.round(levSim * 100),
+    tokSim: Math.round(compositeTokSim * 100),
     unitMatch,
   };
 }
@@ -1352,9 +1352,9 @@ function findMasterlistMatch(productName, ocrUnitOrRows, masterlistRowsArg) {
   return {
     ...best.row,
     _matchScore: best.score,
-    _nameScore:  best.nameScore,
-    _levSim:     best.levSim,
-    _unitMatch:  best.unitMatch,
+    _nameScore: best.nameScore,
+    _levSim: best.levSim,
+    _unitMatch: best.unitMatch,
     _candidates: candidates,
   };
 }
@@ -1420,21 +1420,21 @@ function SalesChart({ mode, orderCountsByMonth, revenueByMonth }) {
       },
       y: showingRevenue
         ? {
-            grid: { color: 'rgba(45,110,62,0.07)' },
-            border: { dash: [4, 4] },
-            ticks: {
-              callback: (value) => `₱${(value / 1000).toFixed(0)}k`,
-            },
-          }
-        : {
-            beginAtZero: true,
-            grid: { color: 'rgba(45,110,62,0.07)' },
-            border: { dash: [4, 4] },
-            ticks: {
-              precision: 0,
-              callback: (value) => `${value}`,
-            },
+          grid: { color: 'rgba(45,110,62,0.07)' },
+          border: { dash: [4, 4] },
+          ticks: {
+            callback: (value) => `₱${(value / 1000).toFixed(0)}k`,
           },
+        }
+        : {
+          beginAtZero: true,
+          grid: { color: 'rgba(45,110,62,0.07)' },
+          border: { dash: [4, 4] },
+          ticks: {
+            precision: 0,
+            callback: (value) => `${value}`,
+          },
+        },
     },
   };
 
@@ -1941,9 +1941,9 @@ export default function Dashboard() {
         const headerIndex = lines.findIndex(l => {
           const lower = l.toLowerCase();
           // Look for common table headers on receipts
-          return lower.includes('quantity') || lower.includes('qty') || 
-                 lower.includes('unit') || lower.includes('item') || 
-                 lower.includes('desc');
+          return lower.includes('quantity') || lower.includes('qty') ||
+            lower.includes('unit') || lower.includes('item') ||
+            lower.includes('desc');
         });
 
         // If we found a header, and it's not in the bottom 20% of the receipt 
@@ -1970,7 +1970,7 @@ export default function Dashboard() {
   const handleAddLineAsItem = (line) => {
     const match = findMasterlistMatch(line, '', masterlistRows);
     console.log('[OCR Match]', { line, match, matchScore: match?._matchScore, matchName: match?.itemName, matchBrand: match?.brand });
-    
+
     let newRow;
     if (match) {
       const variants = manualVariantsByItemKey.get(buildInventoryKey(match.itemType, match.itemName)) || [];
@@ -2592,266 +2592,266 @@ export default function Dashboard() {
                 </label>
               </div>
 
-                <div className="order-items">
-                  <div className="order-items-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 className="order-section-title">Receipt Rows</h3>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        ref={receiptInputRef}
-                        onChange={handleReceiptDictionaryUpload}
-                      />
-                      <button 
-                        type="button" 
-                        className="btn-outline btn-inline" 
-                        onClick={() => receiptInputRef.current?.click()}
-                        disabled={isUploadingReceipt}
-                      >
-                        {isUploadingReceipt ? 'Scanning...' : '📷 Upload Receipt'}
-                      </button>
-                      <button type="button" className="btn-outline btn-inline" onClick={addManualRow}>
-                        + Add Row
-                      </button>
-                    </div>
+              <div className="order-items">
+                <div className="order-items-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 className="order-section-title">Receipt Rows</h3>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      ref={receiptInputRef}
+                      onChange={handleReceiptDictionaryUpload}
+                    />
+                    <button
+                      type="button"
+                      className="btn-outline btn-inline"
+                      onClick={() => receiptInputRef.current?.click()}
+                      disabled={isUploadingReceipt}
+                    >
+                      {isUploadingReceipt ? 'Scanning...' : '📷 Upload Receipt'}
+                    </button>
+                    <button type="button" className="btn-outline btn-inline" onClick={addManualRow}>
+                      + Add Row
+                    </button>
                   </div>
+                </div>
 
-                  {receiptUploadError && <p className="order-form-error" style={{ marginBottom: '1rem' }}>{receiptUploadError}</p>}
+                {receiptUploadError && <p className="order-form-error" style={{ marginBottom: '1rem' }}>{receiptUploadError}</p>}
 
-                  {receiptDraft.scannedLines && receiptDraft.scannedLines.length > 0 && (
-                    <div className="scanned-text-panel" style={{ 
-                      marginBottom: '1.5rem', 
-                      background: 'rgba(255,255,255,0.8)', 
-                      padding: '1rem', 
-                      borderRadius: '8px', 
-                      border: '1px solid #d0ddd0' 
-                    }}>
-                      <h4 style={{ margin: '0 0 0.75rem 0', color: '#1e4d2b', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        Scanned Receipt Lines
-                      </h4>
-                      <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          {receiptDraft.scannedLines.map((line, index) => (
-                            <li key={index} style={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              alignItems: 'center', 
-                              padding: '0.5rem', 
-                              background: '#fff', 
-                              borderRadius: '4px',
-                              border: '1px solid #e2ece2',
-                              fontSize: '0.9rem'
-                            }}>
-                              <span style={{ color: '#2d6e3e', flex: 1, marginRight: '1rem' }}>{line}</span>
-                              <button 
-                                type="button" 
-                                className="btn-outline btn-inline" 
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
-                                onClick={() => handleAddLineAsItem(line)}
-                              >
-                                + Add to Rows
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="order-item-list">
-                    {receiptDraft.manualRows.map((row, index) => {
-                      const itemOptions = manualItemOptionsByType.get(row.itemType) || [];
-                      const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, row.itemName)) || [];
-                      const matchingVariants = getMatchingManualVariants(variants, row);
-                      const selectedVariant = resolveExactManualVariant(variants, row);
-                      const unitOptions = getVariantFieldOptions(variants, 'unit', row);
-                      const descOptions = getVariantFieldOptions(variants, 'itemDesc', row);
-                      const brandOptions = getVariantFieldOptions(variants, 'brand', row);
-                      const priceValue = Number(row.price);
-                      const rowTotal = roundMoney((Number.isFinite(priceValue) ? priceValue : 0) * Number(row.quantity || 0));
-                      const availability = row.itemName && variants.length > 1 && matchingVariants.length !== 1
-                        ? {
-                            tone: 'unknown',
-                            selectTone: 'inventory-tone-unknown',
-                            label: 'Choose variant',
-                            detail: `${matchingVariants.length || variants.length} possible matches`,
-                            help: `Select the exact item description, item unit, and brand for ${row.itemName} before sending this receipt row.`,
-                            isBlocked: false,
-                          }
-                        : getManualAvailabilityState(selectedVariant, row.quantity);
-
-                      return (
-                        <div
-                          className={`manual-item-card ${availability.tone === 'blocked' ? 'is-blocked' : ''}`}
-                          key={row.id}
-                        >
-                          <div className="manual-item-card-head">
-                            <div className="manual-item-card-title">Row {index + 1}</div>
+                {receiptDraft.scannedLines && receiptDraft.scannedLines.length > 0 && (
+                  <div className="scanned-text-panel" style={{
+                    marginBottom: '1.5rem',
+                    background: 'rgba(255,255,255,0.8)',
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    border: '1px solid #d0ddd0'
+                  }}>
+                    <h4 style={{ margin: '0 0 0.75rem 0', color: '#1e4d2b', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Scanned Receipt Lines
+                    </h4>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {receiptDraft.scannedLines.map((line, index) => (
+                          <li key={index} style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '0.5rem',
+                            background: '#fff',
+                            borderRadius: '4px',
+                            border: '1px solid #e2ece2',
+                            fontSize: '0.9rem'
+                          }}>
+                            <span style={{ color: '#2d6e3e', flex: 1, marginRight: '1rem' }}>{line}</span>
                             <button
                               type="button"
-                              className="order-remove-btn"
-                              onClick={() => removeManualRow(row.id)}
-                              disabled={receiptDraft.manualRows.length === 1}
+                              className="btn-outline btn-inline"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+                              onClick={() => handleAddLineAsItem(line)}
                             >
-                              Remove
+                              + Add to Rows
                             </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                <div className="order-item-list">
+                  {receiptDraft.manualRows.map((row, index) => {
+                    const itemOptions = manualItemOptionsByType.get(row.itemType) || [];
+                    const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, row.itemName)) || [];
+                    const matchingVariants = getMatchingManualVariants(variants, row);
+                    const selectedVariant = resolveExactManualVariant(variants, row);
+                    const unitOptions = getVariantFieldOptions(variants, 'unit', row);
+                    const descOptions = getVariantFieldOptions(variants, 'itemDesc', row);
+                    const brandOptions = getVariantFieldOptions(variants, 'brand', row);
+                    const priceValue = Number(row.price);
+                    const rowTotal = roundMoney((Number.isFinite(priceValue) ? priceValue : 0) * Number(row.quantity || 0));
+                    const availability = row.itemName && variants.length > 1 && matchingVariants.length !== 1
+                      ? {
+                        tone: 'unknown',
+                        selectTone: 'inventory-tone-unknown',
+                        label: 'Choose variant',
+                        detail: `${matchingVariants.length || variants.length} possible matches`,
+                        help: `Select the exact item description, item unit, and brand for ${row.itemName} before sending this receipt row.`,
+                        isBlocked: false,
+                      }
+                      : getManualAvailabilityState(selectedVariant, row.quantity);
+
+                    return (
+                      <div
+                        className={`manual-item-card ${availability.tone === 'blocked' ? 'is-blocked' : ''}`}
+                        key={row.id}
+                      >
+                        <div className="manual-item-card-head">
+                          <div className="manual-item-card-title">Row {index + 1}</div>
+                          <button
+                            type="button"
+                            className="order-remove-btn"
+                            onClick={() => removeManualRow(row.id)}
+                            disabled={receiptDraft.manualRows.length === 1}
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="manual-item-grid">
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Item Type</span>
+                            <select
+                              value={row.itemType}
+                              onChange={(event) => handleManualItemTypeChange(row.id, event.target.value)}
+                              required
+                            >
+                              <option value="">Select type</option>
+                              {itemTypeOptions.map((itemType) => (
+                                <option key={itemType} value={itemType}>{itemType}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="manual-item-field manual-item-field-wide">
+                            <span className="manual-item-label">Item Name</span>
+                            <select
+                              className={availability.selectTone}
+                              title={availability.help}
+                              value={row.itemName}
+                              onChange={(event) => handleManualItemNameChange(row.id, event.target.value)}
+                              required
+                              disabled={!row.itemType}
+                            >
+                              <option value="">Select item</option>
+                              {itemOptions.map((itemName) => {
+                                const optionVariants = manualVariantsByItemKey.get(
+                                  buildInventoryKey(row.itemType, itemName),
+                                ) || [];
+                                const optionAvailability = getManualItemAvailabilityState(
+                                  optionVariants,
+                                  row.quantity,
+                                );
+                                return (
+                                  <option
+                                    key={`${row.id}-${itemName}`}
+                                    value={itemName}
+                                    disabled={optionAvailability.isBlocked}
+                                  >
+                                    {`${itemName} • ${optionAvailability.label}`}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </label>
+
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Quantity</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.quantity}
+                              onChange={(event) => updateManualRow(row.id, { quantity: event.target.value })}
+                              placeholder="0"
+                              required
+                            />
+                          </label>
+
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Item Unit</span>
+                            <select
+                              value={row.unit}
+                              onChange={(event) => handleManualVariantFieldChange(row.id, 'unit', event.target.value)}
+                              disabled={!row.itemName || unitOptions.length <= 1}
+                            >
+                              {unitOptions.length > 1 && (
+                                <option value={UNSET_MANUAL_VARIANT_VALUE}>Select unit</option>
+                              )}
+                              {unitOptions.length === 0 && <option value="">Auto</option>}
+                              {unitOptions.map((option) => (
+                                <option key={`${row.id}-unit-${option.value || 'blank'}`} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="manual-item-field manual-item-field-wide">
+                            <span className="manual-item-label">Item Desc</span>
+                            <select
+                              value={row.itemDesc}
+                              onChange={(event) => handleManualVariantFieldChange(row.id, 'itemDesc', event.target.value)}
+                              disabled={!row.itemName || descOptions.length <= 1}
+                            >
+                              {descOptions.length > 1 && (
+                                <option value={UNSET_MANUAL_VARIANT_VALUE}>Select description</option>
+                              )}
+                              {descOptions.length === 0 && <option value="">Auto</option>}
+                              {descOptions.map((option) => (
+                                <option key={`${row.id}-desc-${option.value || 'blank'}`} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Brand</span>
+                            <select
+                              value={row.brand}
+                              onChange={(event) => handleManualVariantFieldChange(row.id, 'brand', event.target.value)}
+                              disabled={!row.itemName || brandOptions.length <= 1}
+                            >
+                              {brandOptions.length > 1 && (
+                                <option value={UNSET_MANUAL_VARIANT_VALUE}>Select brand</option>
+                              )}
+                              {brandOptions.length === 0 && <option value="">Auto</option>}
+                              {brandOptions.map((option) => (
+                                <option key={`${row.id}-brand-${option.value || 'blank'}`} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Price</span>
+                            <input
+                              type="text"
+                              value={row.price === '' || !Number.isFinite(priceValue) ? '' : priceValue.toFixed(2)}
+                              readOnly
+                              placeholder="Auto"
+                            />
+                          </label>
+
+                          <div
+                            className={`manual-stock-panel ${availability.tone}`}
+                            title={availability.help}
+                            aria-label={availability.help}
+                          >
+                            <span className="manual-item-label">Inventory</span>
+                            <strong>{availability.label}</strong>
+                            <span>{row.itemName ? availability.detail : 'Select an item to validate stock.'}</span>
                           </div>
 
-                          <div className="manual-item-grid">
-                            <label className="manual-item-field">
-                              <span className="manual-item-label">Item Type</span>
-                              <select
-                                value={row.itemType}
-                                onChange={(event) => handleManualItemTypeChange(row.id, event.target.value)}
-                                required
-                              >
-                                <option value="">Select type</option>
-                                {itemTypeOptions.map((itemType) => (
-                                  <option key={itemType} value={itemType}>{itemType}</option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="manual-item-field manual-item-field-wide">
-                              <span className="manual-item-label">Item Name</span>
-                              <select
-                                className={availability.selectTone}
-                                title={availability.help}
-                                value={row.itemName}
-                                onChange={(event) => handleManualItemNameChange(row.id, event.target.value)}
-                                required
-                                disabled={!row.itemType}
-                              >
-                                <option value="">Select item</option>
-                                {itemOptions.map((itemName) => {
-                                  const optionVariants = manualVariantsByItemKey.get(
-                                    buildInventoryKey(row.itemType, itemName),
-                                  ) || [];
-                                  const optionAvailability = getManualItemAvailabilityState(
-                                    optionVariants,
-                                    row.quantity,
-                                  );
-                                  return (
-                                    <option
-                                      key={`${row.id}-${itemName}`}
-                                      value={itemName}
-                                      disabled={optionAvailability.isBlocked}
-                                    >
-                                      {`${itemName} • ${optionAvailability.label}`}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-                            </label>
-
-                            <label className="manual-item-field">
-                              <span className="manual-item-label">Quantity</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={row.quantity}
-                                onChange={(event) => updateManualRow(row.id, { quantity: event.target.value })}
-                                placeholder="0"
-                                required
-                              />
-                            </label>
-
-                            <label className="manual-item-field">
-                              <span className="manual-item-label">Item Unit</span>
-                              <select
-                                value={row.unit}
-                                onChange={(event) => handleManualVariantFieldChange(row.id, 'unit', event.target.value)}
-                                disabled={!row.itemName || unitOptions.length <= 1}
-                              >
-                                {unitOptions.length > 1 && (
-                                  <option value={UNSET_MANUAL_VARIANT_VALUE}>Select unit</option>
-                                )}
-                                {unitOptions.length === 0 && <option value="">Auto</option>}
-                                {unitOptions.map((option) => (
-                                  <option key={`${row.id}-unit-${option.value || 'blank'}`} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="manual-item-field manual-item-field-wide">
-                              <span className="manual-item-label">Item Desc</span>
-                              <select
-                                value={row.itemDesc}
-                                onChange={(event) => handleManualVariantFieldChange(row.id, 'itemDesc', event.target.value)}
-                                disabled={!row.itemName || descOptions.length <= 1}
-                              >
-                                {descOptions.length > 1 && (
-                                  <option value={UNSET_MANUAL_VARIANT_VALUE}>Select description</option>
-                                )}
-                                {descOptions.length === 0 && <option value="">Auto</option>}
-                                {descOptions.map((option) => (
-                                  <option key={`${row.id}-desc-${option.value || 'blank'}`} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="manual-item-field">
-                              <span className="manual-item-label">Brand</span>
-                              <select
-                                value={row.brand}
-                                onChange={(event) => handleManualVariantFieldChange(row.id, 'brand', event.target.value)}
-                                disabled={!row.itemName || brandOptions.length <= 1}
-                              >
-                                {brandOptions.length > 1 && (
-                                  <option value={UNSET_MANUAL_VARIANT_VALUE}>Select brand</option>
-                                )}
-                                {brandOptions.length === 0 && <option value="">Auto</option>}
-                                {brandOptions.map((option) => (
-                                  <option key={`${row.id}-brand-${option.value || 'blank'}`} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="manual-item-field">
-                              <span className="manual-item-label">Price</span>
-                              <input
-                                type="text"
-                                value={row.price === '' || !Number.isFinite(priceValue) ? '' : priceValue.toFixed(2)}
-                                readOnly
-                                placeholder="Auto"
-                              />
-                            </label>
-
-                            <div
-                              className={`manual-stock-panel ${availability.tone}`}
-                              title={availability.help}
-                              aria-label={availability.help}
-                            >
-                              <span className="manual-item-label">Inventory</span>
-                              <strong>{availability.label}</strong>
-                              <span>{row.itemName ? availability.detail : 'Select an item to validate stock.'}</span>
-                            </div>
-
-                            <div className="manual-total-panel">
-                              <span className="manual-item-label">Total</span>
-                              <strong>{formatMoney(rowTotal)}</strong>
-                              <span>Auto-calculated from price and quantity.</span>
-                            </div>
+                          <div className="manual-total-panel">
+                            <span className="manual-item-label">Total</span>
+                            <strong>{formatMoney(rowTotal)}</strong>
+                            <span>Auto-calculated from price and quantity.</span>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="masterlist-note">
-                    Item Type, Item Name, Item Desc, Item Unit, and Brand relationships are sourced from the inventory database.
-                    Price is matched from the masterlist {masterlistSource || 'source'} when available, and a row stays unresolved until those fields point to one exact inventory item.
-                  </p>
-                  {masterlistError && <p className="masterlist-warning">{masterlistError}</p>}
+                      </div>
+                    );
+                  })}
                 </div>
+
+                <p className="masterlist-note">
+                  Item Type, Item Name, Item Desc, Item Unit, and Brand relationships are sourced from the inventory database.
+                  Price is matched from the masterlist {masterlistSource || 'source'} when available, and a row stays unresolved until those fields point to one exact inventory item.
+                </p>
+                {masterlistError && <p className="masterlist-warning">{masterlistError}</p>}
+              </div>
 
               {orderFormError && <p className="order-form-error">{orderFormError}</p>}
 

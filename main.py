@@ -10,9 +10,6 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pdf2image import convert_from_bytes, pdfinfo_from_bytes
 
-from paddle_compat import get_modelscope_stub_reason, load_paddleocr_class
-
-
 app = FastAPI()
 
 app.add_middleware(
@@ -24,181 +21,29 @@ app.add_middleware(
 )
 
 
-# ── PaddleOCR ───────────────────────────────────────────────────────────────
-PADDLE_AVAILABLE = False
+# ── RapidOCR ────────────────────────────────────────────────────────────────
+RAPIDOCR_AVAILABLE = False
 ocr_engine = None
 
 
-def _build_paddle_ocr_engine():
-    PaddleOCR = load_paddleocr_class()
-    init_variants = [
-        {"lang": "en", "use_textline_orientation": False},
-        {"lang": "en", "use_textline_orientation": True},
-        {"lang": "en"},
-        {"lang": "en", "use_angle_cls": False},
-        {"lang": "en", "use_angle_cls": True},
-        {},
-    ]
-    last_error = None
-    for kwargs in init_variants:
-        try:
-            return PaddleOCR(**kwargs)
-        except Exception as exc:
-            last_error = exc
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("PaddleOCR initialization failed with no usable configuration.")
+def _build_rapidocr_engine():
+    from rapidocr_onnxruntime import RapidOCR
+    return RapidOCR()
 
 
-def _is_bbox_candidate(value) -> bool:
-    try:
-        arr = np.asarray(value, dtype=np.float32)
-    except Exception:
-        return False
-    if arr.ndim == 2 and arr.shape[0] >= 4 and arr.shape[1] >= 2:
-        return True
-    return arr.ndim == 1 and arr.size in (4, 8)
-
-
-def _normalize_bbox_points(raw_bbox) -> list[list[int]]:
-    arr = np.asarray(raw_bbox, dtype=np.float32)
-    if arr.ndim == 1:
-        if arr.size == 4:
-            x, y, width, height = arr.tolist()
-            arr = np.array(
-                [
-                    [x, y],
-                    [x + width, y],
-                    [x + width, y + height],
-                    [x, y + height],
-                ],
-                dtype=np.float32,
-            )
-        elif arr.size >= 8:
-            arr = arr[:8].reshape(4, 2)
-        else:
-            raise ValueError("Unexpected bbox format")
-    elif arr.ndim == 2:
-        if arr.shape[0] >= 4 and arr.shape[1] >= 2:
-            arr = arr[:4, :2]
-        else:
-            raise ValueError("Unexpected bbox format")
-    else:
-        raise ValueError("Unexpected bbox format")
-    return [[int(round(point[0])), int(round(point[1]))] for point in arr]
-
-
-def _iter_paddle_line_candidates(node):
-    if node is None:
-        return
-
-    # PaddleOCR v3 often returns custom result objects instead of plain dicts.
-    if not isinstance(node, (dict, list, tuple, np.ndarray)):
-        if hasattr(node, "to_dict") and callable(node.to_dict):
-            try:
-                node = node.to_dict()
-            except Exception:
-                pass
-        elif hasattr(node, "__dict__"):
-            node = vars(node)
-
-    if isinstance(node, dict):
-        polys = None
-        for key in ("dt_polys", "rec_polys", "polys", "boxes", "dt_boxes"):
-            value = node.get(key)
-            if value is not None:
-                polys = value
-                break
-
-        texts = None
-        for key in ("rec_texts", "texts"):
-            value = node.get(key)
-            if value is not None:
-                texts = value
-                break
-
-        scores = None
-        for key in ("rec_scores", "scores"):
-            value = node.get(key)
-            if value is not None:
-                scores = value
-                break
-
-        if isinstance(texts, (list, tuple)) and isinstance(polys, (list, tuple, np.ndarray)):
-            count = min(len(texts), len(polys))
-            for index in range(count):
-                confidence = scores[index] if isinstance(scores, (list, tuple, np.ndarray)) and index < len(scores) else 0.0
-                yield (polys[index], texts[index], confidence)
-
-        bbox = node.get("bbox") or node.get("points") or node.get("box")
-        text = node.get("text") or node.get("transcription") or node.get("rec_text")
-        confidence = node.get("score", node.get("confidence", node.get("rec_score", 0.0)))
-        if bbox is not None and text is not None:
-            yield (bbox, text, confidence)
-
-        for key in ("result", "results", "res", "data"):
-            child = node.get(key)
-            if child is not None:
-                yield from _iter_paddle_line_candidates(child)
-        return
-
-    if isinstance(node, (list, tuple)):
-        if len(node) >= 2 and _is_bbox_candidate(node[0]):
-            text_candidate = node[1]
-            text = ""
-            confidence = 0.0
-
-            if isinstance(text_candidate, (list, tuple)):
-                if len(text_candidate) >= 1:
-                    text = str(text_candidate[0] or "")
-                if len(text_candidate) >= 2:
-                    try:
-                        confidence = float(text_candidate[1])
-                    except Exception:
-                        confidence = 0.0
-            elif isinstance(text_candidate, dict):
-                text = str(text_candidate.get("text") or text_candidate.get("rec_text") or "")
-                try:
-                    confidence = float(
-                        text_candidate.get(
-                            "score",
-                            text_candidate.get("confidence", text_candidate.get("rec_score", 0.0)),
-                        )
-                    )
-                except Exception:
-                    confidence = 0.0
-            else:
-                text = str(text_candidate or "")
-
-            yield (node[0], text, confidence)
-            return
-
-        for child in node:
-            yield from _iter_paddle_line_candidates(child)
-        return
-
-    if hasattr(node, "__iter__") and not isinstance(node, (str, bytes, np.ndarray)):
-        for child in node:
-            yield from _iter_paddle_line_candidates(child)
 
 
 def load_ocr_engine():
-    """Lazy-load PaddleOCR for API usage."""
-    global ocr_engine, PADDLE_AVAILABLE
+    """Lazy-load RapidOCR for API usage."""
+    global ocr_engine, RAPIDOCR_AVAILABLE
     if ocr_engine is not None:
         return ocr_engine
     try:
-        ocr_engine = _build_paddle_ocr_engine()
-        PADDLE_AVAILABLE = True
-        workaround_reason = get_modelscope_stub_reason()
-        if workaround_reason:
-            print(
-                "[PaddleOCR] Compatibility mode enabled: "
-                f"ModelScope import skipped ({workaround_reason})"
-            )
+        ocr_engine = _build_rapidocr_engine()
+        RAPIDOCR_AVAILABLE = True
     except Exception as exc:
-        PADDLE_AVAILABLE = False
-        print(f"[PaddleOCR] Could not load: {exc}")
+        RAPIDOCR_AVAILABLE = False
+        print(f"[RapidOCR] Could not load: {exc}")
     return ocr_engine
 
 OCR_DPI = 300
@@ -528,73 +373,48 @@ def clean_scanned_image_variants(pil_img):
     return variants
 
 
-def _prepare_paddle_image(image):
+def _prepare_rapidocr_image(image):
     if image is None:
         return None
     if image.ndim == 2:
-        rgb = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     elif image.shape[2] == 4:
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+        bgr = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
     else:
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    if rgb.dtype != np.uint8:
-        rgb = np.clip(rgb, 0, 255).astype(np.uint8)
-    return rgb
+        bgr = image
+    if bgr.dtype != np.uint8:
+        bgr = np.clip(bgr, 0, 255).astype(np.uint8)
+    return bgr
 
 
-def _run_paddle_ocr_raw(image):
+def _run_rapidocr_raw(image):
     engine = load_ocr_engine()
-    if not PADDLE_AVAILABLE or engine is None:
+    if not RAPIDOCR_AVAILABLE or engine is None:
         return []
 
-    rgb = _prepare_paddle_image(image)
-    if rgb is None:
+    bgr = _prepare_rapidocr_image(image)
+    if bgr is None:
         return []
 
-    errors = []
-    result = None
+    try:
+        result, _ = engine(bgr)
+    except Exception as exc:
+        raise exc
 
-    predict_fn = getattr(engine, "predict", None)
-    if callable(predict_fn):
-        for payload in (rgb, [rgb]):
-            try:
-                result = predict_fn(payload)
-                if result is None:
-                    continue
-                if not isinstance(result, (list, tuple, dict, np.ndarray)):
-                    try:
-                        result = list(result)
-                    except Exception:
-                        pass
-                break
-            except Exception as exc:
-                errors.append(exc)
-
-    if result is None:
-        ocr_fn = getattr(engine, "ocr", None)
-        if callable(ocr_fn):
-            for kwargs in ({}, {"cls": False}, {"cls": True}):
-                try:
-                    result = ocr_fn(rgb, **kwargs)
-                    if result is not None:
-                        break
-                except Exception as exc:
-                    errors.append(exc)
-
-    if result is None and errors:
-        raise errors[-1]
+    if not result:
+        return []
 
     items = []
-    for raw_bbox, raw_text, raw_conf in _iter_paddle_line_candidates(result):
-        text = str(raw_text or "").strip()
+    for dt_box, rec_text, score in result:
+        text = str(rec_text or "").strip()
         if not text:
             continue
         try:
-            bbox = _normalize_bbox_points(raw_bbox)
+            bbox = _normalize_bbox_points(dt_box)
         except Exception:
             continue
         try:
-            conf = float(raw_conf or 0.0)
+            conf = float(score or 0.0)
         except Exception:
             conf = 0.0
         if conf > 1.0:
@@ -632,7 +452,7 @@ def _rotate_results_to_original(results, rotation, width, height):
 
 def readtext_with_fallbacks(image):
     try:
-        results = _run_paddle_ocr_raw(image)
+        results = _run_rapidocr_raw(image)
     except Exception:
         results = []
 
@@ -651,7 +471,7 @@ def readtext_with_fallbacks(image):
     ):
         try:
             rotated_image = cv2.rotate(image, rotate_code)
-            rotated_results = _run_paddle_ocr_raw(rotated_image)
+            rotated_results = _run_rapidocr_raw(rotated_image)
             rotated_results = _rotate_results_to_original(rotated_results, rotation, width, height)
             rotated_score = score_ocr_results(rotated_results)
             if rotated_score > best_score:
@@ -1369,8 +1189,8 @@ async def match_receipt(
 def _warmup_ocr_engine():
     try:
         load_ocr_engine()
-        print("[PaddleOCR] Engine warmed up successfully.")
+        print("[RapidOCR] Engine warmed up successfully.")
     except Exception as exc:
-        print(f"[PaddleOCR] Warmup failed (will retry on first request): {exc}")
+        print(f"[RapidOCR] Warmup failed (will retry on first request): {exc}")
 
 threading.Thread(target=_warmup_ocr_engine, daemon=True).start()
