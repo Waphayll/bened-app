@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
@@ -11,8 +11,9 @@ import {
   Tooltip,
   Legend,
   Filler,
+  ArcElement,
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line, Bar, Pie } from 'react-chartjs-2';
 import { useAuth } from '../lib/AuthContext';
 import {
   applyReceiptRowsToInventory,
@@ -33,12 +34,22 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
+  ArcElement,
 );
 
 ChartJS.defaults.font.family = "'EB Garamond', Georgia, serif";
 ChartJS.defaults.color = '#5a7a5a';
 
-const MONTH_LABELS = ['January', 'February', 'March', 'April', 'May', 'June'];
+const ALL_MONTH_LABELS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const CHART_PERIODS = {
+  'H1': { start: 0, end: 6, label: 'January to June' },
+  'H2': { start: 6, end: 12, label: 'July to December' },
+  'Q1': { start: 0, end: 3, label: 'January to March' },
+  'Q2': { start: 3, end: 6, label: 'April to June' },
+  'Q3': { start: 6, end: 9, label: 'July to September' },
+  'Q4': { start: 9, end: 12, label: 'October to December' },
+  'Year': { start: 0, end: 12, label: 'January to December' },
+};
 const DAILY_SALES_QUOTA = 80000;
 const SALES_TARGET_PERIODS = ['day', 'week', 'month'];
 const SALES_TARGET_PERIOD_META = {
@@ -59,15 +70,7 @@ const PRODUCT_BAR_COLORS = ['#2d6e3e', '#3a8f50', '#4db368', '#8aab8a', '#d0ddd0
 const MANUAL_VARIANT_FIELDS = ['unit', 'itemDesc', 'brand'];
 const MANUAL_VARIANT_AUTOFILL_ORDER = ['itemDesc', 'unit', 'brand'];
 const UNSET_MANUAL_VARIANT_VALUE = '__unset_manual_variant__';
-
-const SUMMARY = [
-  { color: 'var(--green)', text: '3 purchase orders pending approval' },
-  { color: 'var(--red)', text: '2 items below reorder threshold' },
-  { color: 'var(--amber)', text: '5 shipments in transit' },
-  { color: 'var(--green)', text: 'Monthly close in 8 days' },
-  { color: 'var(--green)', text: 'Top client: Ramonal Eng. Corp.' },
-  { color: 'var(--amber)', text: 'Audit scheduled: 28 Mar 2026' },
-];
+const QUICK_SUMMARY_FILTERS = ['All', 'Sales', 'Inventory', 'Alerts'];
 
 const RECEIPT_OCR_API_BASE = (
   import.meta.env.VITE_RECEIPT_OCR_API_BASE || 'http://127.0.0.1:8000'
@@ -257,7 +260,7 @@ function getReceiptLineTotal(record) {
 }
 
 function deriveRevenueByMonth(receiptRecords, year) {
-  const totals = Array(MONTH_LABELS.length).fill(0);
+  const totals = Array(12).fill(0);
 
   receiptRecords.forEach((record) => {
     const rawDate = record?.inputDate;
@@ -267,7 +270,7 @@ function deriveRevenueByMonth(receiptRecords, year) {
     if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return;
 
     const monthIndex = date.getMonth();
-    if (monthIndex < 0 || monthIndex >= MONTH_LABELS.length) return;
+    if (monthIndex < 0 || monthIndex >= 12) return;
 
     totals[monthIndex] = roundMoney(totals[monthIndex] + getReceiptLineTotal(record));
   });
@@ -276,7 +279,7 @@ function deriveRevenueByMonth(receiptRecords, year) {
 }
 
 function deriveOrderCountsByMonth(receiptRecords, year) {
-  const counts = Array(MONTH_LABELS.length).fill(0);
+  const counts = Array(12).fill(0);
 
   receiptRecords.forEach((record) => {
     const rawDate = record?.inputDate;
@@ -286,7 +289,7 @@ function deriveOrderCountsByMonth(receiptRecords, year) {
     if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return;
 
     const monthIndex = date.getMonth();
-    if (monthIndex >= 0 && monthIndex < MONTH_LABELS.length) {
+    if (monthIndex >= 0 && monthIndex < 12) {
       counts[monthIndex] += 1;
     }
   });
@@ -421,11 +424,178 @@ function deriveCategorySales(receiptRecords) {
     }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  const maxRevenue = rows[0]?.revenue || 0;
+  const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
 
   return rows.map((row) => ({
     ...row,
-    share: maxRevenue > 0 ? roundMoney((row.revenue / maxRevenue) * 100) : 0,
+    shareOfTotal: totalRevenue > 0 ? roundMoney((row.revenue / totalRevenue) * 100) : 0,
+  }));
+}
+
+function getReceiptWindowMetrics(receiptRecords, start, end) {
+  return receiptRecords.reduce((summary, record) => {
+    const rawDate = record?.inputDate;
+    if (!rawDate) return summary;
+
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) return summary;
+
+    const timestamp = parsed.getTime();
+    if (timestamp < start.getTime() || timestamp >= end.getTime()) return summary;
+
+    return {
+      revenue: roundMoney(summary.revenue + getReceiptLineTotal(record)),
+      rowCount: summary.rowCount + 1,
+    };
+  }, { revenue: 0, rowCount: 0 });
+}
+
+function getSummaryToneMeta(tone) {
+  switch (tone) {
+    case 'alert':
+      return {
+        color: 'var(--red)',
+        label: 'Needs Action',
+      };
+    case 'warning':
+      return {
+        color: 'var(--amber)',
+        label: 'Watch',
+      };
+    case 'positive':
+      return {
+        color: 'var(--green)',
+        label: 'Healthy',
+      };
+    default:
+      return {
+        color: 'var(--mid)',
+        label: 'Info',
+      };
+  }
+}
+
+function deriveQuickSummaryItems({
+  receiptRecords,
+  inventoryTableRows,
+  salesByCategory,
+  productPerformance,
+  referenceDate = new Date(),
+}) {
+  const startOfToday = getStartOfDay(referenceDate);
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+
+  const todayMetrics = getReceiptWindowMetrics(receiptRecords, startOfToday, endOfToday);
+  const weeklyMetrics = deriveSalesTargetMetrics(receiptRecords, 'week', referenceDate);
+  const topCategory = salesByCategory[0] || null;
+  const topProduct = productPerformance[0] || null;
+  const lowStockRows = inventoryTableRows.filter((row) => row.inventoryLabel === 'Low Stock');
+  const trackedInventoryRows = inventoryTableRows.filter((row) => Number.isFinite(row.currentInv));
+  const coveragePct = inventoryTableRows.length > 0
+    ? roundMoney((trackedInventoryRows.length / inventoryTableRows.length) * 100)
+    : 0;
+
+  const items = [
+    {
+      id: 'today-sales',
+      group: 'Sales',
+      tone: todayMetrics.rowCount > 0 ? 'positive' : 'neutral',
+      title: 'Today Sales',
+      text: todayMetrics.rowCount > 0
+        ? `${formatMoney(todayMetrics.revenue)} posted today`
+        : 'No receipt revenue logged yet today.',
+      detail: todayMetrics.rowCount > 0
+        ? `${todayMetrics.rowCount.toLocaleString()} receipt row${todayMetrics.rowCount === 1 ? '' : 's'} recorded so far.`
+        : 'New receipt inputs will surface here as soon as they are saved.',
+      navTarget: 'Sales',
+      actionLabel: 'Open Sales',
+    },
+    {
+      id: 'weekly-quota',
+      group: 'Sales',
+      tone: weeklyMetrics.progressPct >= 100 ? 'positive' : weeklyMetrics.progressPct >= 60 ? 'warning' : 'alert',
+      title: 'Weekly Quota',
+      text: `${weeklyMetrics.progressPct.toFixed(1)}% of weekly target reached`,
+      detail: `${formatMoney(weeklyMetrics.actual)} booked out of ${formatMoney(weeklyMetrics.target)}.`,
+      navTarget: 'Sales',
+      actionLabel: 'Review Revenue',
+    },
+    topCategory
+      ? {
+        id: 'top-category',
+        group: 'Sales',
+        tone: 'positive',
+        title: 'Top Category',
+        text: `${topCategory.name} leads category sales`,
+        detail: `${formatMoney(topCategory.revenue)} · ${topCategory.shareOfTotal.toFixed(1)}% of category revenue.`,
+        navTarget: 'Sales',
+        actionLabel: 'View Breakdown',
+      }
+      : {
+        id: 'top-category',
+        group: 'Sales',
+        tone: 'neutral',
+        title: 'Top Category',
+        text: 'Category revenue will appear once receipts are posted.',
+        detail: 'Add receipt rows to unlock sales distribution insights.',
+        navTarget: 'Sales',
+        actionLabel: 'Open Sales',
+      },
+    {
+      id: 'low-stock',
+      group: 'Inventory',
+      tone: lowStockRows.length > 0 ? 'alert' : 'positive',
+      title: lowStockRows.length > 0 ? 'Restock Attention' : 'Inventory Health',
+      text: lowStockRows.length > 0
+        ? `${lowStockRows.length} item${lowStockRows.length === 1 ? '' : 's'} below safe stock level`
+        : 'No items are currently flagged as low stock.',
+      detail: lowStockRows.length > 0
+        ? `Closest to depletion: ${lowStockRows.slice(0, 2).map((row) => row.itemName).join(', ')}.`
+        : `${trackedInventoryRows.length.toLocaleString()} item${trackedInventoryRows.length === 1 ? '' : 's'} currently have tracked quantity values.`,
+      navTarget: 'Inventory',
+      actionLabel: 'Open Inventory',
+    },
+    {
+      id: 'inventory-coverage',
+      group: 'Inventory',
+      tone: coveragePct >= 75 ? 'positive' : coveragePct >= 40 ? 'warning' : 'alert',
+      title: 'Inventory Coverage',
+      text: inventoryTableRows.length > 0
+        ? `${coveragePct.toFixed(0)}% of catalog lines have stock values`
+        : 'Inventory coverage is waiting for catalog data.',
+      detail: inventoryTableRows.length > 0
+        ? `${trackedInventoryRows.length.toLocaleString()} of ${inventoryTableRows.length.toLocaleString()} item lines have quantity records.`
+        : 'Load inventory rows to activate stock coverage analytics.',
+      navTarget: 'Inventory',
+      actionLabel: 'Review Coverage',
+    },
+    topProduct
+      ? {
+        id: 'top-product',
+        group: 'Sales',
+        tone: 'positive',
+        title: 'Top Mover',
+        text: `${topProduct.name} leads by quantity sold`,
+        detail: `${formatQuantity(topProduct.quantity)} total unit${Number(topProduct.quantity) === 1 ? '' : 's'} across receipt rows.`,
+        navTarget: 'Sales',
+        actionLabel: 'Inspect Product',
+      }
+      : {
+        id: 'top-product',
+        group: 'Sales',
+        tone: 'neutral',
+        title: 'Top Mover',
+        text: 'Product momentum will show up after the first sales entries.',
+        detail: 'The dashboard compares total sold quantities from receipt rows.',
+        navTarget: 'Sales',
+        actionLabel: 'Open Sales',
+      },
+  ];
+
+  return items.map((item) => ({
+    ...item,
+    ...getSummaryToneMeta(item.tone),
   }));
 }
 
@@ -1181,6 +1351,38 @@ function levenshteinSim(a, b) {
   return 1 - dist / Math.max(na.length, nb.length);
 }
 
+/** 
+ * Scans the OCR text for substrings that are an 82%+ fuzzy match to a known brand,
+ * and replaces the misspelling with the correct brand name to aid token overlap scoring.
+ */
+function fuzzyCorrectAgainstKnownTerms(text, knownTerms) {
+  let correctedText = (text || '').replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (!correctedText || !knownTerms || knownTerms.length === 0) return text;
+  
+  const sortedTerms = [...knownTerms].sort((a, b) => b.length - a.length);
+  let textTokens = correctedText.split(' ');
+  
+  for (const term of sortedTerms) {
+    const termClean = term.replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    const termTokens = termClean.split(' ');
+    const termLen = termTokens.length;
+    if (termLen === 0) continue;
+    
+    for (let i = 0; i <= textTokens.length - termLen; i++) {
+      const window = textTokens.slice(i, i + termLen).join(' ');
+      const dist = levenshtein(window.toLowerCase(), termClean);
+      const sim = 1.0 - (dist / Math.max(window.length, termClean.length));
+      
+      if (sim >= 0.82) {
+        textTokens.splice(i, termLen, ...termTokens);
+        i += termLen - 1;
+      }
+    }
+  }
+  
+  return textTokens.join(' ');
+}
+
 /**
  * Build a character-level diff between ocrText and masterlistName.
  * Returns an array of { text, type } where type is 'match'|'insert'|'delete'.
@@ -1246,15 +1448,44 @@ function normalizeUnit(unit) {
 }
 
 /**
+ * Substring containment scoring for OCR text where spaces are lost.
+ * Strips all non-alphanumeric chars and checks if brand/name/desc appear
+ * as character substrings within the OCR text.
+ * Returns a score between 0 and 1.
+ */
+function substringContainmentScore(productName, row) {
+  const stripped = normalizeLookup(productName);
+  if (!stripped) return 0;
+
+  const parts = [
+    normalizeLookup(row.brand || ''),
+    normalizeLookup(row.itemName || ''),
+    normalizeLookup(row.itemDesc || ''),
+  ].filter(p => p.length >= 2); // ignore trivially short parts
+
+  if (parts.length === 0) return 0;
+
+  let hits = 0;
+  let totalWeight = 0;
+  for (const part of parts) {
+    const weight = part.length; // longer parts are worth more
+    totalWeight += weight;
+    if (stripped.includes(part)) hits += weight;
+  }
+
+  return hits / totalWeight;
+}
+
+/**
  * Score one OCR product string against one masterlist row.
  * 
  * OCR receipt lines are typically long and noisy (e.g. "300 PCS real steel 058 G3 10mm 147.84 30,586.24")
  * while masterlist entries are short and clean (e.g. brand="REAL STEEL", name="058 G3 10mm", unit="PCS").
  * 
- * We therefore heavily weight composite token containment (does the OCR line contain the words
- * from brand + name + desc + unit?) and use Levenshtein only as a minor tiebreaker.
- * 
- * Weights: composite token containment 0.70, Levenshtein 0.15, desc bonus 0.10, unit bonus ±0.15
+ * Uses three scoring approaches and takes the best:
+ * 1. Token overlap (works when OCR preserves word boundaries)
+ * 2. Substring containment (works when OCR smashes words together)
+ * 3. Levenshtein similarity (tiebreaker)
  */
 function scoreItemAgainstRow(productName, ocrUnit, row) {
   const mlName = row.itemName || '';
@@ -1264,12 +1495,13 @@ function scoreItemAgainstRow(productName, ocrUnit, row) {
   const normOcrUnit = normalizeUnit(ocrUnit);
 
   // Build a composite string: brand + name + description + unit.
-  // This lets the OCR line "300 PCS real steel 058 G3 10mm" match a row where
-  // brand="REAL STEEL", name="058 G3", unit="PCS", desc="10mm".
   const compositeName = [mlBrand, mlName, mlDesc, row.unit || ''].filter(Boolean).join(' ');
 
   // Token containment: what fraction of the masterlist composite words are found in the OCR text?
   const compositeTokSim = Math.min(tokenOverlapScore(productName, compositeName), 1.0);
+
+  // Substring containment: handles smashed-together OCR text (e.g. "REALSTEELDSBG33")
+  const containment = substringContainmentScore(productName, row);
 
   // Levenshtein: only between OCR text and itemName (minor tiebreaker)
   const levSim = levenshteinSim(productName, mlName);
@@ -1277,8 +1509,9 @@ function scoreItemAgainstRow(productName, ocrUnit, row) {
   // Also try Levenshtein against just the name portion for short clean inputs
   const nameTokSim = Math.min(tokenOverlapScore(productName, mlName), 1.0);
 
-  // Primary score: composite containment dominates
-  let nameScore = compositeTokSim * 0.70 + Math.max(levSim, nameTokSim) * 0.15;
+  // Primary score: use whichever approach found the best match
+  const bestOverlap = Math.max(compositeTokSim, containment);
+  let nameScore = bestOverlap * 0.70 + Math.max(levSim, nameTokSim) * 0.15;
   nameScore = Math.min(nameScore, 0.90);
 
   let descScore = 0;
@@ -1299,6 +1532,7 @@ function scoreItemAgainstRow(productName, ocrUnit, row) {
     nameScore: Math.round(nameScore * 100),
     levSim: Math.round(levSim * 100),
     tokSim: Math.round(compositeTokSim * 100),
+    containment: Math.round(containment * 100),
     unitMatch,
   };
 }
@@ -1373,12 +1607,11 @@ function NavLogoMark() {
   );
 }
 
-function SalesChart({ mode, orderCountsByMonth, revenueByMonth }) {
+function SalesChart({ mode, labels, dataSeries }) {
   const showingRevenue = mode === 'Revenue';
-  const dataSeries = showingRevenue ? revenueByMonth : orderCountsByMonth;
 
   const chartData = {
-    labels: MONTH_LABELS,
+    labels: labels,
     datasets: [{
       label: showingRevenue ? 'Revenue (₱)' : 'Order Count',
       data: dataSeries,
@@ -1439,6 +1672,44 @@ function SalesChart({ mode, orderCountsByMonth, revenueByMonth }) {
   };
 
   return <Line data={chartData} options={options} />;
+}
+
+function CategorySalesPieChart({ categories }) {
+  const data = {
+    labels: categories.map((category) => category.name),
+    datasets: [{
+      data: categories.map((category) => category.revenue),
+      backgroundColor: categories.map((category) => category.fill),
+      borderColor: '#ffffff',
+      borderWidth: 2,
+      hoverOffset: 10,
+    }],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#fff',
+        borderColor: '#d0ddd0',
+        borderWidth: 1,
+        titleColor: '#1e4d2b',
+        bodyColor: '#2d6e3e',
+        padding: 12,
+        callbacks: {
+          label: (ctx) => {
+            const category = categories[ctx.dataIndex];
+            if (!category) return '';
+            return ` ${formatMoney(category.revenue)} (${category.shareOfTotal.toFixed(1)}%)`;
+          },
+        },
+      },
+    },
+  };
+
+  return <Pie data={data} options={options} />;
 }
 
 function ProductChart({ products }) {
@@ -1512,9 +1783,12 @@ export default function Dashboard() {
   const [masterlistSource, setMasterlistSource] = useState('');
   const [masterlistError, setMasterlistError] = useState('');
   const [salesTargetPeriod, setSalesTargetPeriod] = useState('day');
+  const [chartPeriod, setChartPeriod] = useState('H1');
+  const [summaryFilter, setSummaryFilter] = useState('All');
 
   const dropdownRef = useRef(null);
   const receiptInputRef = useRef(null);
+  const deferredInventorySearch = useDeferredValue(inventorySearch);
 
   const dateStr = new Date().toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -1549,6 +1823,11 @@ export default function Dashboard() {
     deriveCategorySales(receiptRows)
   ), [receiptRows]);
 
+  const chartRange = CHART_PERIODS[chartPeriod] || CHART_PERIODS['H1'];
+  const chartLabels = useMemo(() => ALL_MONTH_LABELS.slice(chartRange.start, chartRange.end), [chartRange]);
+  const displayedRevenue = useMemo(() => revenueByMonth.slice(chartRange.start, chartRange.end), [revenueByMonth, chartRange]);
+  const displayedOrderCounts = useMemo(() => orderCountsByMonth.slice(chartRange.start, chartRange.end), [orderCountsByMonth, chartRange]);
+
   const productPerformance = useMemo(() => (
     deriveProductPerformance(receiptRows)
   ), [receiptRows]);
@@ -1564,6 +1843,23 @@ export default function Dashboard() {
   const inventoryTableRows = useMemo(() => (
     deriveInventoryTableRows(masterlistRows, inventoryRows)
   ), [inventoryRows, masterlistRows]);
+
+  const quickSummaryItems = useMemo(() => (
+    deriveQuickSummaryItems({
+      receiptRecords: receiptRows,
+      inventoryTableRows,
+      salesByCategory,
+      productPerformance,
+    })
+  ), [inventoryTableRows, productPerformance, receiptRows, salesByCategory]);
+
+  const filteredQuickSummaryItems = useMemo(() => (
+    quickSummaryItems.filter((item) => {
+      if (summaryFilter === 'All') return true;
+      if (summaryFilter === 'Alerts') return item.tone === 'alert' || item.tone === 'warning';
+      return item.group === summaryFilter;
+    })
+  ), [quickSummaryItems, summaryFilter]);
 
   const inventoryOverview = useMemo(() => (
     deriveInventoryOverview(inventoryRows)
@@ -1634,7 +1930,7 @@ export default function Dashboard() {
   ), [inventoryTableRows]);
 
   const filteredInventoryRows = useMemo(() => {
-    const searchNeedle = normalizeLookup(inventorySearch);
+    const searchNeedle = normalizeLookup(deferredInventorySearch);
 
     return inventoryTableRows.filter((row) => {
       if (inventoryCategoryFilter !== 'All' && row.itemType !== inventoryCategoryFilter) {
@@ -1661,11 +1957,11 @@ export default function Dashboard() {
 
       return haystack.includes(searchNeedle);
     });
-  }, [inventoryCategoryFilter, inventorySearch, inventoryStatusFilter, inventoryTableRows]);
+  }, [deferredInventorySearch, inventoryCategoryFilter, inventoryStatusFilter, inventoryTableRows]);
 
   const totalOrdersInGraphWindow = useMemo(() => (
-    orderCountsByMonth.reduce((total, value) => total + value, 0)
-  ), [orderCountsByMonth]);
+    displayedOrderCounts.reduce((total, value) => total + value, 0)
+  ), [displayedOrderCounts]);
 
   const pageTitle = activeNav === 'Sales'
     ? 'Sales'
@@ -1677,12 +1973,17 @@ export default function Dashboard() {
     ? 'Receipt rows from the Appwrite receipts table'
     : activeNav === 'Inventory'
       ? 'Masterlist rows joined with quantities from the Appwrite inventory table'
-      : 'Fiscal Year 2026 · Q1 Performance';
+      : `Live operating snapshot · ${currentYear}`;
 
   const showReceiptActions = activeNav !== 'Inventory';
 
   const cycleSalesTargetPeriod = () => {
     setSalesTargetPeriod((current) => getNextSalesTargetPeriod(current));
+  };
+
+  const handleQuickSummaryAction = (nextView) => {
+    if (!nextView) return;
+    setActiveNav(nextView);
   };
 
   useEffect(() => {
@@ -1968,8 +2269,13 @@ export default function Dashboard() {
   };
 
   const handleAddLineAsItem = (line) => {
-    const match = findMasterlistMatch(line, '', masterlistRows);
-    console.log('[OCR Match]', { line, match, matchScore: match?._matchScore, matchName: match?.itemName, matchBrand: match?.brand });
+    const masterlistBrands = Array.from(new Set(masterlistRows.map(r => r.brand).filter(Boolean)));
+    const masterlistItemNames = Array.from(new Set(masterlistRows.map(r => r.itemName).filter(Boolean)));
+    const knownTerms = [...masterlistBrands, ...masterlistItemNames];
+    const correctedLine = fuzzyCorrectAgainstKnownTerms(line, knownTerms);
+
+    const match = findMasterlistMatch(correctedLine, '', masterlistRows);
+    console.log('[OCR Match]', { originalLine: line, correctedLine, match, matchScore: match?._matchScore, matchName: match?.itemName, matchBrand: match?.brand });
 
     let newRow;
     if (match) {
@@ -2116,9 +2422,10 @@ export default function Dashboard() {
             <span className="brand-sub">Industrial Group</span>
           </div>
           <div className="nav-divider" />
-          <nav className="nav-links">
+          <nav className="nav-links d-none d-lg-flex">
             {navItems.map((item) => (
               <button
+                type="button"
                 key={item}
                 className={`nav-link ${activeNav === item ? 'active' : ''}`}
                 onClick={() => setActiveNav(item)}
@@ -2144,10 +2451,10 @@ export default function Dashboard() {
               <div className="user-dropdown">
                 <div className="dropdown-meta">{user?.email}</div>
                 <div className="dropdown-divider" />
-                <button className="dropdown-item">My Profile</button>
-                <button className="dropdown-item">Settings</button>
+                <button type="button" className="dropdown-item">My Profile</button>
+                <button type="button" className="dropdown-item">Settings</button>
                 <div className="dropdown-divider" />
-                <button className="dropdown-item danger" onClick={handleLogout}>
+                <button type="button" className="dropdown-item danger" onClick={handleLogout}>
                   Sign Out
                 </button>
               </div>
@@ -2156,194 +2463,302 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="page-header">
+      <div className="page-header d-flex flex-column flex-lg-row align-items-start align-items-lg-end justify-content-between gap-2">
         <div>
           <h1 className="page-title">{pageTitle}</h1>
           <p className="page-sub">{pageSubtitle}</p>
           {orderFeedback && <p className="order-feedback">{orderFeedback}</p>}
         </div>
-        <div className="header-actions">
-          <button className="btn-outline">Export Report</button>
+        <div className="header-actions d-flex flex-column flex-sm-row">
           {showReceiptActions && (
-            <button className="btn-solid" onClick={openReceiptModal}>Input Receipt</button>
+            <button type="button" className="btn-solid" onClick={openReceiptModal}>Input Receipt</button>
           )}
         </div>
+      </div>
+
+      <div className="mobile-nav-shell d-lg-none px-3 px-sm-4 pb-3">
+        <label className="mobile-nav-label" htmlFor="dashboard-view-select">Navigate</label>
+        <select
+          id="dashboard-view-select"
+          className="form-select"
+          value={activeNav}
+          onChange={(event) => setActiveNav(event.target.value)}
+          aria-label="Choose dashboard section"
+        >
+          {navItems.map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
       </div>
 
       <main className="dash-main">
         {activeNav === 'Dashboard' && (
           <>
-            <section className="kpi-strip">
-              <div className="kpi-card" style={{ '--delay': '0.05s' }}>
-                <div className="kpi-label">Total Revenue</div>
-                <div className="kpi-value">{formatMoney(totalRevenue)}</div>
-                <div className="kpi-delta positive">Based on receipt rows in the database</div>
-              </div>
-              <div className="kpi-card" style={{ '--delay': '0.1s' }}>
-                <div className="kpi-label">Orders Fulfilled</div>
-                <div className="kpi-value">{totalOrdersInGraphWindow.toLocaleString()}</div>
-                <div className="kpi-delta positive">Based on receipt rows for Jan–Jun {currentYear}</div>
-              </div>
-              <button
-                type="button"
-                className="kpi-card kpi-card-button"
-                style={{ '--delay': '0.15s' }}
-                onClick={cycleSalesTargetPeriod}
-                aria-label={`Sales target card showing ${salesTargetMetrics.badge.toLowerCase()} quota. Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
-                title={`Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
-              >
-                <div className="kpi-card-head">
-                  <div className="kpi-label">Sales Target</div>
-                  <span className="kpi-chip">{salesTargetMetrics.badge}</span>
+            <section className="row g-2 dashboard-kpi-strip">
+              <div className="col-12 col-md-6 col-xl-3">
+                <div className="kpi-card h-100" style={{ '--delay': '0.05s' }}>
+                  <div className="kpi-label">Total Revenue</div>
+                  <div className="kpi-value">{formatMoney(totalRevenue)}</div>
+                  <div className="kpi-delta positive">Based on receipt rows in the database</div>
                 </div>
-                <div className="kpi-value">{salesTargetMetrics.progressPct.toFixed(1)}%</div>
-                <div className={`kpi-delta ${salesTargetMetrics.tone}`}>{salesTargetMetrics.summary}</div>
-                <div className="kpi-progress">
-                  <div
-                    className="kpi-progress-bar"
-                    style={{ width: `${salesTargetMetrics.progressBarPct}%` }}
-                  />
+              </div>
+
+              <div className="col-12 col-md-6 col-xl-3">
+                <div className="kpi-card h-100" style={{ '--delay': '0.1s' }}>
+                  <div className="kpi-label">Orders Fulfilled</div>
+                  <div className="kpi-value">{totalOrdersInGraphWindow.toLocaleString()}</div>
+                  <div className="kpi-delta positive">{`Based on receipt rows for ${chartRange.label} ${currentYear}`}</div>
                 </div>
-                <div className="kpi-note">{salesTargetMetrics.note}</div>
-              </button>
-              <div className="kpi-card" style={{ '--delay': '0.2s' }}>
-                <div className="kpi-label">Total SKUs in Stock</div>
-                <div className="kpi-value">{inventoryOverview.totalSkusInStock.toLocaleString()}</div>
-                <div className={`kpi-delta ${inventoryOverview.lowStockAlertCount > 0 ? 'negative' : 'positive'}`}>
-                  {inventoryOverview.lowStockAlertCount > 0
-                    ? `▼ ${inventoryOverview.lowStockAlertCount} low-stock alert${inventoryOverview.lowStockAlertCount === 1 ? '' : 's'}`
-                    : `Based on ${inventoryOverview.trackedSkuCount.toLocaleString()} tracked SKU${inventoryOverview.trackedSkuCount === 1 ? '' : 's'} in the database`}
+              </div>
+
+              <div className="col-12 col-md-6 col-xl-3">
+                <button
+                  type="button"
+                  className="kpi-card kpi-card-button h-100"
+                  style={{ '--delay': '0.15s' }}
+                  onClick={cycleSalesTargetPeriod}
+                  aria-label={`Sales target card showing ${salesTargetMetrics.badge.toLowerCase()} quota. Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
+                  title={`Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
+                >
+                  <div className="kpi-card-head">
+                    <div className="kpi-label">Sales Target</div>
+                    <span className="kpi-chip">{salesTargetMetrics.badge}</span>
+                  </div>
+                  <div className="kpi-value">{salesTargetMetrics.progressPct.toFixed(1)}%</div>
+                  <div className={`kpi-delta ${salesTargetMetrics.tone}`}>{salesTargetMetrics.summary}</div>
+                  <div className="kpi-progress">
+                    <div
+                      className="kpi-progress-bar"
+                      style={{ width: `${salesTargetMetrics.progressBarPct}%` }}
+                    />
+                  </div>
+                  <div className="kpi-note">{salesTargetMetrics.note}</div>
+                </button>
+              </div>
+
+              <div className="col-12 col-md-6 col-xl-3">
+                <div className="kpi-card h-100" style={{ '--delay': '0.2s' }}>
+                  <div className="kpi-label">Total SKUs in Stock</div>
+                  <div className="kpi-value">{inventoryOverview.totalSkusInStock.toLocaleString()}</div>
+                  <div className={`kpi-delta ${inventoryOverview.lowStockAlertCount > 0 ? 'negative' : 'positive'}`}>
+                    {inventoryOverview.lowStockAlertCount > 0
+                      ? `▼ ${inventoryOverview.lowStockAlertCount} low-stock alert${inventoryOverview.lowStockAlertCount === 1 ? '' : 's'}`
+                      : `Based on ${inventoryOverview.trackedSkuCount.toLocaleString()} tracked SKU${inventoryOverview.trackedSkuCount === 1 ? '' : 's'} in the database`}
+                  </div>
                 </div>
               </div>
             </section>
 
-            <section className="row-two">
-              <div className="panel">
-                <div className="panel-header">
-                  <div>
-                    <div className="panel-title">Monthly Sales Overview</div>
-                    <div className="panel-sub">
-                      {activeTab === 'Revenue'
-                        ? `Revenue (₱) — January to June ${currentYear}`
-                        : `Orders per month — January to June ${currentYear}`}
+            <section className="row g-2 dashboard-row-two">
+              <div className="col-12 col-xl-6">
+                <div className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <div className="panel-title">Monthly Sales Overview</div>
+                      <div className="panel-sub">
+                        {activeTab === 'Revenue'
+                          ? `Revenue (₱) — ${chartRange.label} ${currentYear}`
+                          : `Orders per month — ${chartRange.label} ${currentYear}`}
+                      </div>
                     </div>
-                  </div>
-                  <div className="panel-tabs">
-                    {['Revenue', 'Orders'].map((tab) => (
-                      <button
-                        key={tab}
-                        className={`tab ${activeTab === tab ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab)}
+                    <div className="panel-header-controls d-flex flex-column flex-md-row align-items-stretch align-items-md-center gap-2 gap-md-3">
+                      <select
+                        className="form-select form-select-sm chart-period-select"
+                        value={chartPeriod}
+                        onChange={(event) => setChartPeriod(event.target.value)}
+                        aria-label="Select chart period"
                       >
-                        {tab}
-                      </button>
-                    ))}
+                        {Object.keys(CHART_PERIODS).map((period) => (
+                          <option key={period} value={period}>{period}</option>
+                        ))}
+                      </select>
+                      <div className="panel-tabs">
+                        {['Revenue', 'Orders'].map((tab) => (
+                          <button
+                            type="button"
+                            key={tab}
+                            className={`tab ${activeTab === tab ? 'active' : ''}`}
+                            onClick={() => setActiveTab(tab)}
+                          >
+                            {tab}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="chart-area">
-                  <SalesChart
-                    mode={activeTab}
-                    orderCountsByMonth={orderCountsByMonth}
-                    revenueByMonth={revenueByMonth}
-                  />
+                  <div className="chart-area">
+                    <SalesChart
+                      mode={activeTab}
+                      labels={chartLabels}
+                      dataSeries={activeTab === 'Revenue' ? displayedRevenue : displayedOrderCounts}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="panel">
-                <div className="panel-header">
-                  <div>
-                    <div className="panel-title">Inventory Status</div>
-                    <div className="panel-sub">
-                      {`Stock levels by ${inventoryStatusData.groupingLabel} · lowest quantity first`}
+              <div className="col-12 col-xl-6">
+                <div className="panel panel-inventory-status">
+                  <div className="panel-header">
+                    <div>
+                      <div className="panel-title">Inventory Status</div>
+                      <div className="panel-sub">
+                        {`Stock levels by ${inventoryStatusData.groupingLabel} · lowest quantity first`}
+                      </div>
                     </div>
                   </div>
+                  {inventoryStatusData.rows.length > 0 ? (
+                    <div className="inv-list inv-list-scroll">
+                      {inventoryStatusData.rows.map((item) => (
+                        <div className="inv-row" key={item.name}>
+                          <div className="inv-info">
+                            <span className="inv-name">{item.name}</span>
+                            <span className="inv-qty">{item.qtyLabel}</span>
+                          </div>
+                          <div className="inv-bar-wrap">
+                            <div
+                              className="inv-bar"
+                              style={{ width: `${item.inventoryPct}%`, background: item.color }}
+                            />
+                          </div>
+                          <span className={`inv-badge ${item.inventoryBadge}`}>{item.inventoryLabel}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="panel-empty-state">
+                      <p>{inventoryError || 'No inventory rows found in the database yet.'}</p>
+                    </div>
+                  )}
                 </div>
-                {inventoryStatusData.rows.length > 0 ? (
-                  <div className="inv-list">
-                    {inventoryStatusData.rows.map((item) => (
-                      <div className="inv-row" key={item.name}>
-                        <div className="inv-info">
-                          <span className="inv-name">{item.name}</span>
-                          <span className="inv-qty">{item.qtyLabel}</span>
-                        </div>
-                        <div className="inv-bar-wrap">
-                          <div
-                            className="inv-bar"
-                            style={{ width: `${item.inventoryPct}%`, background: item.color }}
-                          />
-                        </div>
-                        <span className={`inv-badge ${item.inventoryBadge}`}>{item.inventoryLabel}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="panel-empty-state">
-                    <p>{inventoryError || 'No inventory rows found in the database yet.'}</p>
-                  </div>
-                )}
               </div>
             </section>
 
-            <section className="row-three">
-              <div className="panel panel-performance">
-                <div className="panel-header">
-                  <div>
-                    <div className="panel-title">Product Performance</div>
-                    <div className="panel-sub">Top 5 by units sold from receipts database</div>
+            <section className="row g-2 dashboard-row-three">
+              <div className="col-12 col-xl-4">
+                <div className="panel panel-performance h-100">
+                  <div className="panel-header">
+                    <div>
+                      <div className="panel-title">Product Performance</div>
+                      <div className="panel-sub">Top 5 by units sold from receipts database</div>
+                    </div>
                   </div>
-                </div>
-                {productPerformance.length > 0 ? (
-                  <div className="chart-area chart-area-sm">
-                    <ProductChart products={productPerformance} />
-                  </div>
-                ) : (
-                  <div className="panel-empty-state">
-                    <p>{receiptError || 'No receipt rows yet for product performance.'}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="panel panel-targets">
-                <div className="panel-header">
-                  <div>
-                    <div className="panel-title">Sales</div>
-                    <div className="panel-sub">Total revenue per category from receipts database</div>
-                  </div>
-                </div>
-                <div className="target-list">
-                  {salesByCategory.length > 0 ? (
-                    salesByCategory.map((category) => (
-                      <div className="target-row" key={category.name}>
-                        <div className="target-label">
-                          <span className="target-name">{category.name}</span>
-                          <span className="target-pct">{formatMoney(category.revenue)}</span>
-                        </div>
-                        <div className="target-track">
-                          <div
-                            className="target-fill"
-                            style={{ width: `${category.share}%`, background: category.fill }}
-                          />
-                        </div>
-                      </div>
-                    ))
+                  {productPerformance.length > 0 ? (
+                    <div className="chart-area chart-area-sm">
+                      <ProductChart products={productPerformance} />
+                    </div>
                   ) : (
-                    <p className="panel-list-message">{receiptError || 'No receipt revenue yet by category.'}</p>
+                    <div className="panel-empty-state">
+                      <p>{receiptError || 'No receipt rows yet for product performance.'}</p>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="panel panel-summary">
-                <div className="panel-header">
-                  <div className="panel-title">Quick Summary</div>
+              <div className="col-12 col-xl-4">
+                <div className="panel panel-sales-distribution h-100">
+                  <div className="panel-header">
+                    <div>
+                      <div className="panel-title">Sales Distribution</div>
+                      <div className="panel-sub">Revenue share per category from the receipts database</div>
+                    </div>
+                  </div>
+
+                  {salesByCategory.length > 0 ? (
+                    <div className="sales-distribution-layout row g-3 align-items-center">
+                      <div className="col-12 col-md-6">
+                        <div className="chart-area sales-distribution-chart">
+                          <CategorySalesPieChart categories={salesByCategory} />
+                        </div>
+                      </div>
+
+                      <div className="col-12 col-md-6">
+                        <div className="sales-distribution-meta">
+                          <div className="sales-distribution-total">
+                            <span className="sales-distribution-label">Total categorized revenue</span>
+                            <strong>{formatMoney(totalRevenue)}</strong>
+                            <span>{salesByCategory.length} active categor{salesByCategory.length === 1 ? 'y' : 'ies'}</span>
+                          </div>
+
+                          <ul className="sales-distribution-list">
+                            {salesByCategory.map((category) => (
+                              <li className="sales-distribution-item" key={category.name}>
+                                <div className="sales-distribution-item-main">
+                                  <span className="sales-distribution-swatch" style={{ background: category.fill }} />
+                                  <span className="sales-distribution-name">{category.name}</span>
+                                </div>
+                                <div className="sales-distribution-item-values">
+                                  <span>{formatMoney(category.revenue)}</span>
+                                  <span>{category.shareOfTotal.toFixed(1)}%</span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="panel-empty-state">
+                      <p>{receiptError || 'No receipt revenue yet by category.'}</p>
+                    </div>
+                  )}
                 </div>
-                <ul className="summary-list">
-                  {SUMMARY.map((summary, index) => (
-                    <li className="summary-item" key={index}>
-                      <span className="summary-dot" style={{ background: summary.color }} />
-                      <span>{summary.text}</span>
-                    </li>
-                  ))}
-                </ul>
+              </div>
+
+              <div className="col-12 col-xl-4">
+                <div className="panel panel-summary h-100">
+                  <div className="panel-header">
+                    <div>
+                      <div className="panel-title">Quick Summary</div>
+                      <div className="panel-sub">Live highlights with jump-to-section shortcuts</div>
+                    </div>
+                    <span className="summary-count">
+                      {filteredQuickSummaryItems.length} insight{filteredQuickSummaryItems.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <div className="summary-toolbar">
+                    {QUICK_SUMMARY_FILTERS.map((filter) => (
+                      <button
+                        type="button"
+                        key={filter}
+                        className={`summary-filter-btn btn btn-sm ${summaryFilter === filter ? 'active' : ''}`}
+                        onClick={() => setSummaryFilter(filter)}
+                        aria-pressed={summaryFilter === filter}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+
+                  {filteredQuickSummaryItems.length > 0 ? (
+                    <ul className="summary-list">
+                      {filteredQuickSummaryItems.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            className="summary-item"
+                            onClick={() => handleQuickSummaryAction(item.navTarget)}
+                          >
+                            <span className="summary-dot" style={{ background: item.color }} />
+                            <div className="summary-copy">
+                              <div className="summary-copy-head">
+                                <span className="summary-title">{item.title}</span>
+                                <span className={`summary-tone tone-${item.tone}`}>{item.label}</span>
+                              </div>
+                              <span className="summary-text">{item.text}</span>
+                              <span className="summary-detail">{item.detail}</span>
+                            </div>
+                            <span className="summary-action">{item.actionLabel}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="panel-empty-state">
+                      <p>No summary items match the current filter.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           </>
@@ -2360,7 +2775,7 @@ export default function Dashboard() {
               </div>
             </div>
             {salesTableRows.length > 0 ? (
-              <div className="data-table-wrap">
+              <div className="data-table-wrap table-responsive">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -2477,7 +2892,7 @@ export default function Dashboard() {
                 </div>
               )}
               {filteredInventoryRows.length > 0 ? (
-                <div className="data-table-wrap">
+                <div className="data-table-wrap table-responsive">
                   <table className="data-table">
                     <thead>
                       <tr>

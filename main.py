@@ -28,6 +28,9 @@ ocr_engine = None
 
 def _build_rapidocr_engine():
     from rapidocr_onnxruntime import RapidOCR
+    import os
+    # Use multiple threads for ONNX inference
+    os.environ.setdefault("OMP_NUM_THREADS", str(min(os.cpu_count() or 4, 8)))
     return RapidOCR()
 
 
@@ -46,13 +49,15 @@ def load_ocr_engine():
         print(f"[RapidOCR] Could not load: {exc}")
     return ocr_engine
 
-OCR_DPI = 300
+OCR_DPI = 200
 KEYWORD_MATCH_THRESHOLD = 0.82
 MIN_WORD_CONFIDENCE = 0.10
 MIN_LINE_CONFIDENCE = 0.15
-FAST_EXIT_OCR_SCORE = 80.0
-MIN_ROTATION_TRIGGER_SCORE = 14.0
+FAST_EXIT_OCR_SCORE = 55.0
+MIN_ROTATION_TRIGGER_SCORE = 10.0
 AGGRESSIVE_VARIANT_PENALTY = 10.0
+OCR_DET_LIMIT_SIDE = 960
+OCR_TEXT_SCORE = 0.3
 
 WHITESPACE_RE = re.compile(r"\s+")
 SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?%)\]])")
@@ -155,13 +160,25 @@ def pil_to_gray(pil_img):
 def upscale_for_ocr(gray):
     height, width = gray.shape[:2]
     shortest_edge = max(1, min(height, width))
-    scale = min(2.0, max(1.0, 1400.0 / shortest_edge))
+    # Reduced target from 1400 to 1000 — RapidOCR handles lower-res well
+    scale = min(1.8, max(1.0, 1000.0 / shortest_edge))
 
     if scale <= 1.05:
         return gray
 
     new_size = (int(width * scale), int(height * scale))
     return cv2.resize(gray, new_size, interpolation=cv2.INTER_CUBIC)
+
+
+def _downscale_if_huge(gray, max_side=2400):
+    """Downscale images that are excessively large before heavy preprocessing."""
+    h, w = gray.shape[:2]
+    longest = max(h, w)
+    if longest <= max_side:
+        return gray
+    scale = max_side / longest
+    return cv2.resize(gray, (max(1, int(w * scale)), max(1, int(h * scale))),
+                      interpolation=cv2.INTER_AREA)
 
 
 def crop_to_text_region(gray):
@@ -293,12 +310,11 @@ def estimate_skew_angle(binary_inv):
 
 def clean_scanned_image_variants(pil_img):
     gray = pil_to_gray(pil_img)
+    gray = _downscale_if_huge(gray)
     gray = upscale_for_ocr(gray)
 
-    if gray.size <= 3_000_000:
-        denoised = cv2.fastNlMeansDenoising(gray, None, 12, 7, 21)
-    else:
-        denoised = cv2.medianBlur(gray, 3)
+    # Always use cheap denoising — fastNlMeansDenoising is very slow
+    denoised = cv2.medianBlur(gray, 3)
 
     clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
     enhanced = clahe.apply(denoised)
@@ -397,7 +413,11 @@ def _run_rapidocr_raw(image):
         return []
 
     try:
-        result, _ = engine(bgr)
+        result, _ = engine(
+            bgr,
+            det_limit_side_len=OCR_DET_LIMIT_SIDE,
+            text_score=OCR_TEXT_SCORE,
+        )
     except Exception as exc:
         raise exc
 
@@ -422,6 +442,10 @@ def _run_rapidocr_raw(image):
         conf = max(0.0, min(1.0, conf))
         items.append((bbox, text, conf))
     return items
+
+
+def _normalize_bbox_points(dt_box):
+    return [[int(round(pt[0])), int(round(pt[1]))] for pt in dt_box]
 
 
 def _rotate_bbox_points(points, rotation, width, height):
@@ -460,25 +484,21 @@ def readtext_with_fallbacks(image):
     if len(results) >= 2 and base_score >= MIN_ROTATION_TRIGGER_SCORE:
         return results
 
+    # Only try 180° rotation — 90/270 rarely needed for receipts/documents
     height, width = image.shape[:2]
     best_results = results
     best_score = base_score
 
-    for rotation, rotate_code in (
-        (90, cv2.ROTATE_90_CLOCKWISE),
-        (180, cv2.ROTATE_180),
-        (270, cv2.ROTATE_90_COUNTERCLOCKWISE),
-    ):
-        try:
-            rotated_image = cv2.rotate(image, rotate_code)
-            rotated_results = _run_rapidocr_raw(rotated_image)
-            rotated_results = _rotate_results_to_original(rotated_results, rotation, width, height)
-            rotated_score = score_ocr_results(rotated_results)
-            if rotated_score > best_score:
-                best_score = rotated_score
-                best_results = rotated_results
-        except Exception:
-            continue
+    try:
+        rotated_image = cv2.rotate(image, cv2.ROTATE_180)
+        rotated_results = _run_rapidocr_raw(rotated_image)
+        rotated_results = _rotate_results_to_original(rotated_results, 180, width, height)
+        rotated_score = score_ocr_results(rotated_results)
+        if rotated_score > best_score:
+            best_score = rotated_score
+            best_results = rotated_results
+    except Exception:
+        pass
 
     return best_results if best_score > (base_score + 1.2) else results
 
@@ -822,6 +842,14 @@ def ocr_receipt_lines(image_bytes):
             }
         )
 
+        # Fast exit: if the first variant is already good, skip the rest
+        if (
+            ocr_score >= FAST_EXIT_OCR_SCORE
+            and line_quality >= 0.65
+            and len(filtered_lines) >= 4
+        ):
+            break
+
     if not candidates:
         return []
 
@@ -1067,14 +1095,136 @@ def _precompute_masterlist_index(masterlist_rows):
         norm_name = normalize_text(ml_name)
         name_tokens = token_set(ml_name)
         desc_tokens = token_set(ml_desc) if ml_desc else set()
+        brand_tokens = token_set(row.get("brand", ""))
         indexed.append({
             "row": row,
             "norm_name": norm_name,
             "name_tokens": name_tokens,
             "desc_tokens": desc_tokens,
+            "brand_tokens": brand_tokens,
+            "ml_unit": ml_unit,
             "ml_unit": ml_unit,
         })
     return indexed
+
+
+def fuzzy_correct_against_known_terms(text, known_terms, threshold=0.82):
+    """Fuzzy-correct tokens in `text` against a set of known terms (item names, brands, etc.)."""
+    text_clean = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", str(text).lower())).strip()
+    if not text_clean or not known_terms:
+        return text
+    
+    sorted_terms = sorted(known_terms, key=len, reverse=True)
+    text_tokens = text_clean.split()
+    
+    for term in sorted_terms:
+        term_clean = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", str(term).lower())).strip()
+        term_tokens = term_clean.split()
+        term_len = len(term_tokens)
+        if term_len == 0: continue
+        
+        i = 0
+        while i <= len(text_tokens) - term_len:
+            window = " ".join(text_tokens[i:i+term_len])
+            sim = SequenceMatcher(None, window, term_clean).ratio()
+            if sim >= threshold:
+                text_tokens[i:i+term_len] = term_tokens
+                i += term_len
+            else:
+                i += 1
+                
+    return " ".join(text_tokens)
+
+
+def substring_containment_score(product_name, row):
+    """Score by checking if brand/name/desc appear as substrings in the OCR text (ignoring spaces)."""
+    stripped = normalize_text(product_name)
+    if not stripped:
+        return 0.0
+
+    parts = [
+        normalize_text(row.get("brand", "")),
+        normalize_text(row.get("itemName", "")),
+        normalize_text(row.get("itemDesc", "")),
+    ]
+    parts = [p for p in parts if len(p) >= 2]
+    if not parts:
+        return 0.0
+
+    hits = 0
+    total_weight = 0
+    for part in parts:
+        weight = len(part)
+        total_weight += weight
+        if part in stripped:
+            hits += weight
+
+    return hits / total_weight if total_weight > 0 else 0.0
+
+
+def score_item_against_masterlist(item, row):
+    product_name = str(item.get("product_name", ""))
+    ocr_unit = normalize_receipt_unit(str(item.get("unit") or ""))
+    
+    ml_name = str(row.get("itemName", ""))
+    ml_brand = str(row.get("brand", ""))
+    ml_desc = str(row.get("itemDesc", ""))
+    ml_unit = normalize_receipt_unit(str(row.get("unit", "")))
+
+    composite_name = " ".join(filter(None, [ml_brand, ml_name, ml_desc, str(row.get("unit", ""))]))
+    
+    set_a = token_set(product_name)
+    set_b = token_set(composite_name)
+    
+    if not set_a or not set_b:
+        composite_tok_sim = 0.0
+    else:
+        overlap = sum(1 for t in set_a if t in set_b)
+        composite_tok_sim = min((overlap / float(len(set_b))) + (overlap * 0.01), 1.0)
+
+    # Substring containment: handles smashed-together OCR text
+    containment = substring_containment_score(product_name, row)
+        
+    set_c = token_set(ml_name)
+    if not set_a or not set_c:
+        name_tok_sim = 0.0
+    else:
+        overlap2 = sum(1 for t in set_a if t in set_c)
+        name_tok_sim = min((overlap2 / float(len(set_c))) + (overlap2 * 0.01), 1.0)
+
+    a_clean = normalize_text(product_name)
+    b_clean = normalize_text(ml_name)
+    if not a_clean or not b_clean:
+        lev_sim = 0.0
+    else:
+        lev_sim = SequenceMatcher(None, a_clean, b_clean).ratio()
+
+    # Use whichever overlap approach found the best match
+    best_overlap = max(composite_tok_sim, containment)
+    name_score = best_overlap * 0.70 + max(lev_sim, name_tok_sim) * 0.15
+    name_score = min(name_score, 0.90)
+
+    desc_score = 0.0
+    if ml_desc:
+        c_clean = normalize_text(ml_desc)
+        if a_clean and c_clean:
+            desc_lev = SequenceMatcher(None, a_clean, c_clean).ratio()
+            desc_score = min(desc_lev * 0.10, 0.10)
+
+    unit_match = None
+    unit_bonus = 0.0
+    if ocr_unit and ml_unit:
+        unit_match = (ocr_unit == ml_unit)
+        unit_bonus = 0.15 if unit_match else -0.10
+
+    score = max(0.0, name_score + desc_score + unit_bonus)
+
+    return {
+        "score": score,
+        "name_score": round(name_score * 100),
+        "desc_score": round(lev_sim * 100),
+        "unit_match": unit_match
+    }
 
 
 def match_items_to_masterlist(ocr_items, masterlist_rows):
@@ -1083,13 +1233,31 @@ def match_items_to_masterlist(ocr_items, masterlist_rows):
     """
     indexed = _precompute_masterlist_index(masterlist_rows)
 
+    masterlist_brands = set()
+    masterlist_item_names = set()
+    for row in masterlist_rows:
+        brand = row.get("brand", "").strip()
+        if brand:
+            masterlist_brands.add(brand)
+        item_name = row.get("itemName", "").strip()
+        if item_name:
+            masterlist_item_names.add(item_name)
+
+    # Combine brands and item names for fuzzy correction
+    known_terms = masterlist_brands | masterlist_item_names
+
     enriched = []
     for item in ocr_items:
         best_row = None
         best_meta = {"score": 0.0, "name_score": 0.0, "desc_score": 0.0, "unit_match": None}
 
-        product_name = item.get("product_name", "")
-        product_tokens = token_set(product_name)
+        raw_product_name = item.get("product_name", "")
+        # Fuzzy correct OCR typos against known item names and brands before scoring
+        corrected_product_name = fuzzy_correct_against_known_terms(raw_product_name, known_terms)
+        if raw_product_name:
+            item["product_name"] = corrected_product_name
+
+        product_tokens = token_set(corrected_product_name)
         ocr_unit = normalize_receipt_unit(item.get("unit") or "")
 
         for entry in indexed:
@@ -1098,7 +1266,7 @@ def match_items_to_masterlist(ocr_items, masterlist_rows):
             # ── Cheap pre-filter: skip if no token overlap at all ────────
             if product_tokens and entry["name_tokens"]:
                 overlap = len(product_tokens & entry["name_tokens"])
-                if overlap == 0 and not entry["desc_tokens"].intersection(product_tokens):
+                if overlap == 0 and not entry["desc_tokens"].intersection(product_tokens) and not entry["brand_tokens"].intersection(product_tokens):
                     continue
 
             meta = score_item_against_masterlist(item, row)

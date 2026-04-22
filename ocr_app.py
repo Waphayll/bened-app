@@ -53,7 +53,12 @@ ocr_load_error = None
 
 def _build_rapidocr_engine():
     from rapidocr_onnxruntime import RapidOCR
+    import os
+    os.environ.setdefault("OMP_NUM_THREADS", str(min(os.cpu_count() or 4, 8)))
     return RapidOCR()
+
+OCR_DET_LIMIT_SIDE = 960
+OCR_TEXT_SCORE = 0.3
 
 
 class OCREngineUnavailable(RuntimeError):
@@ -347,7 +352,11 @@ def run_rapidocr(image: np.ndarray) -> list[dict]:
         bgr = np.clip(bgr, 0, 255).astype(np.uint8)
 
     try:
-        result, _ = engine(bgr)
+        result, _ = engine(
+            bgr,
+            det_limit_side_len=OCR_DET_LIMIT_SIDE,
+            text_score=OCR_TEXT_SCORE,
+        )
     except Exception as exc:
         raise exc
 

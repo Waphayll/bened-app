@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import { pingAppwrite } from './lib/appwrite';
-import Login     from './pages/Login';
-import Dashboard from './pages/Dashboard';
+
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 
 function RouteLoading() {
   return <div className="route-loading">Loading session...</div>;
@@ -31,12 +32,14 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/"         element={<Navigate to="/login" replace />} />
-          <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="*"         element={<Navigate to="/login" replace />} />
-        </Routes>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/"         element={<Navigate to="/login" replace />} />
+            <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="*"         element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );
