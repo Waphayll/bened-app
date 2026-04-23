@@ -71,11 +71,47 @@ const MANUAL_VARIANT_FIELDS = ['unit', 'itemDesc', 'brand'];
 const MANUAL_VARIANT_AUTOFILL_ORDER = ['itemDesc', 'unit', 'brand'];
 const UNSET_MANUAL_VARIANT_VALUE = '__unset_manual_variant__';
 const QUICK_SUMMARY_FILTERS = ['All', 'Sales', 'Inventory', 'Alerts'];
+const SALES_TABLE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Receipts' },
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'year', label: 'This Year' },
+  { value: 'last30', label: 'Last 30 Days' },
+];
 
 const RECEIPT_OCR_API_BASE = (
   import.meta.env.VITE_RECEIPT_OCR_API_BASE || 'http://127.0.0.1:8000'
 ).replace(/\/$/, '');
 const MASTERLIST_CSV_URL = import.meta.env.VITE_MASTERLIST_CSV_URL || '/masterlist.csv';
+
+function padDateTimePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function getCurrentLocalDateTimeValue(date = new Date()) {
+  return [
+    date.getFullYear(),
+    padDateTimePart(date.getMonth() + 1),
+    padDateTimePart(date.getDate()),
+  ].join('-') + `T${padDateTimePart(date.getHours())}:${padDateTimePart(date.getMinutes())}`;
+}
+
+function parseReceiptDateValue(value) {
+  if (!value) return null;
+
+  const rawValue = String(value).trim();
+  const dateOnlyMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(rawValue);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 function createManualRow() {
   return {
@@ -93,7 +129,7 @@ function createManualRow() {
 function createReceiptDraft(inputtedBy = 'User') {
   return {
     inputtedBy,
-    inputDate: new Date().toISOString().slice(0, 10),
+    inputDate: getCurrentLocalDateTimeValue(),
     notes: '',
     scannedLines: [],
     manualRows: [createManualRow()],
@@ -133,8 +169,8 @@ function formatQuantity(value) {
 function formatDateValue(value) {
   if (!value) return 'N/A';
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
+  const parsed = parseReceiptDateValue(value);
+  if (!parsed) return String(value);
 
   const rawValue = String(value);
   const hasTime = /T|\d:\d/.test(rawValue);
@@ -266,8 +302,8 @@ function deriveRevenueByMonth(receiptRecords, year) {
     const rawDate = record?.inputDate;
     if (!rawDate) return;
 
-    const date = new Date(rawDate);
-    if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return;
+    const date = parseReceiptDateValue(rawDate);
+    if (!date || date.getFullYear() !== year) return;
 
     const monthIndex = date.getMonth();
     if (monthIndex < 0 || monthIndex >= 12) return;
@@ -285,8 +321,8 @@ function deriveOrderCountsByMonth(receiptRecords, year) {
     const rawDate = record?.inputDate;
     if (!rawDate) return;
 
-    const date = new Date(rawDate);
-    if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return;
+    const date = parseReceiptDateValue(rawDate);
+    if (!date || date.getFullYear() !== year) return;
 
     const monthIndex = date.getMonth();
     if (monthIndex >= 0 && monthIndex < 12) {
@@ -313,6 +349,49 @@ function getStartOfWeek(date) {
 
 function getStartOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getStartOfYear(date) {
+  return new Date(date.getFullYear(), 0, 1);
+}
+
+function getSalesTableFilterWindow(filter, referenceDate = new Date()) {
+  const current = new Date(referenceDate);
+
+  if (filter === 'today') {
+    const start = getStartOfDay(current);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { start, end };
+  }
+
+  if (filter === 'week') {
+    const start = getStartOfWeek(current);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start, end };
+  }
+
+  if (filter === 'month') {
+    const start = getStartOfMonth(current);
+    const end = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    return { start, end };
+  }
+
+  if (filter === 'year') {
+    const start = getStartOfYear(current);
+    const end = new Date(current.getFullYear() + 1, 0, 1);
+    return { start, end };
+  }
+
+  if (filter === 'last30') {
+    const end = new Date(current);
+    const start = getStartOfDay(current);
+    start.setDate(start.getDate() - 29);
+    return { start, end, inclusiveEnd: true };
+  }
+
+  return null;
 }
 
 function getNextSalesTargetPeriod(period) {
@@ -373,8 +452,8 @@ function deriveSalesTargetMetrics(receiptRecords, period, referenceDate = new Da
     const rawDate = record?.inputDate;
     if (!rawDate) return total;
 
-    const parsed = new Date(rawDate);
-    if (Number.isNaN(parsed.getTime())) return total;
+    const parsed = parseReceiptDateValue(rawDate);
+    if (!parsed) return total;
 
     const timestamp = parsed.getTime();
     if (timestamp < start.getTime() || timestamp >= end.getTime()) return total;
@@ -437,8 +516,8 @@ function getReceiptWindowMetrics(receiptRecords, start, end) {
     const rawDate = record?.inputDate;
     if (!rawDate) return summary;
 
-    const parsed = new Date(rawDate);
-    if (Number.isNaN(parsed.getTime())) return summary;
+    const parsed = parseReceiptDateValue(rawDate);
+    if (!parsed) return summary;
 
     const timestamp = parsed.getTime();
     if (timestamp < start.getTime() || timestamp >= end.getTime()) return summary;
@@ -1785,6 +1864,7 @@ export default function Dashboard() {
   const [salesTargetPeriod, setSalesTargetPeriod] = useState('day');
   const [chartPeriod, setChartPeriod] = useState('H1');
   const [summaryFilter, setSummaryFilter] = useState('All');
+  const [salesTableDateFilter, setSalesTableDateFilter] = useState('all');
 
   const dropdownRef = useRef(null);
   const receiptInputRef = useRef(null);
@@ -1834,11 +1914,33 @@ export default function Dashboard() {
 
   const salesTableRows = useMemo(() => (
     [...receiptRows].sort((a, b) => {
-      const aTime = new Date(a?.inputDate || 0).getTime();
-      const bTime = new Date(b?.inputDate || 0).getTime();
+      const aTime = parseReceiptDateValue(a?.inputDate)?.getTime() ?? 0;
+      const bTime = parseReceiptDateValue(b?.inputDate)?.getTime() ?? 0;
       return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
     })
   ), [receiptRows]);
+
+  const filteredSalesTableRows = useMemo(() => {
+    const filterWindow = getSalesTableFilterWindow(salesTableDateFilter);
+    if (!filterWindow) return salesTableRows;
+
+    const { start, end, inclusiveEnd = false } = filterWindow;
+    return salesTableRows.filter((row) => {
+      const parsed = parseReceiptDateValue(row?.inputDate);
+      if (!parsed) return false;
+
+      const timestamp = parsed.getTime();
+      if (inclusiveEnd) {
+        return timestamp >= start.getTime() && timestamp <= end.getTime();
+      }
+
+      return timestamp >= start.getTime() && timestamp < end.getTime();
+    });
+  }, [salesTableDateFilter, salesTableRows]);
+
+  const activeSalesTableFilterLabel = useMemo(() => (
+    SALES_TABLE_FILTER_OPTIONS.find((option) => option.value === salesTableDateFilter)?.label || 'All Receipts'
+  ), [salesTableDateFilter]);
 
   const inventoryTableRows = useMemo(() => (
     deriveInventoryTableRows(masterlistRows, inventoryRows)
@@ -2784,17 +2886,34 @@ export default function Dashboard() {
               <div>
                 <div className="panel-title">Receipts Table</div>
                 <div className="panel-sub">
-                  {salesTableRows.length.toLocaleString()} receipt row{salesTableRows.length === 1 ? '' : 's'} from the database
+                  {filteredSalesTableRows.length.toLocaleString()} receipt row{filteredSalesTableRows.length === 1 ? '' : 's'} shown
+                  {' · '}
+                  filter: {activeSalesTableFilterLabel}
                 </div>
               </div>
+              <div className="panel-header-controls">
+                <label className="table-filter-shell" htmlFor="sales-table-date-filter">
+                  <span className="table-filter-label">Filter</span>
+                  <select
+                    id="sales-table-date-filter"
+                    className="table-filter-select"
+                    value={salesTableDateFilter}
+                    onChange={(event) => setSalesTableDateFilter(event.target.value)}
+                  >
+                    {SALES_TABLE_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
-            {salesTableRows.length > 0 ? (
+            {filteredSalesTableRows.length > 0 ? (
               <div className="data-table-wrap table-responsive">
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Input By</th>
-                      <th>Input Date</th>
+                      <th>Input Date &amp; Time</th>
                       <th>Item Name</th>
                       <th>Category</th>
                       <th className="table-num">Price</th>
@@ -2803,7 +2922,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {salesTableRows.map((row, index) => (
+                    {filteredSalesTableRows.map((row, index) => (
                       <tr key={`${row.inputDate}-${row.itemName}-${index}`}>
                         <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
@@ -2819,7 +2938,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="panel-empty-state">
-                <p>{receiptError || 'No receipt rows found in the receipts table.'}</p>
+                <p>{receiptError || 'No receipt rows match the selected date filter.'}</p>
               </div>
             )}
           </section>
@@ -3002,9 +3121,9 @@ export default function Dashboard() {
                   <input type="text" value={receiptDraft.inputtedBy} readOnly />
                 </label>
                 <label className="order-field">
-                  <span className="order-field-label">Input Date</span>
+                  <span className="order-field-label">Input Date &amp; Time</span>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={receiptDraft.inputDate}
                     onChange={(event) => updateReceiptField('inputDate', event.target.value)}
                     required

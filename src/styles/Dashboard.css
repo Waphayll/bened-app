@@ -380,6 +380,22 @@
   justify-content: flex-end;
 }
 
+.table-filter-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 172px;
+}
+
+.table-filter-label {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+
 .chart-period-select {
   min-width: 104px;
   border-color: var(--pale);
@@ -393,6 +409,24 @@
 .chart-period-select:focus {
   border-color: var(--green);
   box-shadow: 0 0 0 0.2rem rgba(45, 110, 62, 0.12);
+}
+
+.table-filter-select {
+  min-width: 172px;
+  border: 1px solid var(--pale);
+  background: var(--white);
+  padding: 10px 12px;
+  color: var(--green-deep);
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.table-filter-select:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(45, 110, 62, 0.14);
 }
 
 .tab {
@@ -1739,6 +1773,10 @@
   .inventory-sidebar {
     position: static;
   }
+  .table-filter-shell,
+  .table-filter-select {
+    width: 100%;
+  }
   .order-grid { grid-template-columns: 1fr; }
   .manual-item-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1774,6 +1812,12 @@
   .sales-distribution-layout {
     padding-left: 16px;
     padding-right: 16px;
+  }
+  .panel-header {
+    gap: 12px;
+  }
+  .panel-header-controls {
+    width: 100%;
   }
   .chart-area {
     padding-left: 16px;

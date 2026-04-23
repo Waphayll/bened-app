@@ -28,6 +28,34 @@ function roundMoney(value) {
   return Math.round(parsed * 100) / 100;
 }
 
+function padDateTimePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function getCurrentLocalDateTimeValue(date = new Date()) {
+  return [
+    date.getFullYear(),
+    padDateTimePart(date.getMonth() + 1),
+    padDateTimePart(date.getDate()),
+  ].join('-') + `T${padDateTimePart(date.getHours())}:${padDateTimePart(date.getMinutes())}`;
+}
+
+function parseReceiptDateValue(value) {
+  if (!value) return null;
+
+  const rawValue = String(value).trim();
+  const dateOnlyMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(rawValue);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function formatMoney(value) {
   if (!Number.isFinite(Number(value))) return 'N/A';
   return `P ${Number(value).toLocaleString('en-PH', {
@@ -48,20 +76,28 @@ function formatNumber(value, fractionDigits = 2) {
 function formatDateValue(value) {
   if (!value) return 'N/A';
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
+  const parsed = parseReceiptDateValue(value);
+  if (!parsed) return String(value);
 
-  return parsed.toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return /T|\d:\d/.test(String(value))
+    ? parsed.toLocaleString('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    : parsed.toLocaleDateString('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
 }
 
 function createReceiptForm(inputBy = 'Admin') {
   return {
     inputBy,
-    inputDate: new Date().toISOString().slice(0, 10),
+    inputDate: getCurrentLocalDateTimeValue(),
     itemType: '',
     itemName: '',
     price: '',
@@ -85,7 +121,7 @@ function createMasterlistForm() {
 function mapReceiptToForm(record, fallbackInputBy = 'Admin') {
   return {
     inputBy: String(record?.inputBy || fallbackInputBy),
-    inputDate: String(record?.inputDate || new Date().toISOString().slice(0, 10)),
+    inputDate: String(record?.inputDate || getCurrentLocalDateTimeValue()),
     itemType: String(record?.itemType || ''),
     itemName: String(record?.itemName || ''),
     price: Number.isFinite(Number(record?.price)) ? String(record.price) : '',
@@ -185,8 +221,8 @@ export default function AdminDashboard() {
 
   const sortedReceiptRows = useMemo(() => (
     [...receiptRows].sort((a, b) => {
-      const aTime = new Date(a?.inputDate || 0).getTime();
-      const bTime = new Date(b?.inputDate || 0).getTime();
+      const aTime = parseReceiptDateValue(a?.inputDate)?.getTime() ?? 0;
+      const bTime = parseReceiptDateValue(b?.inputDate)?.getTime() ?? 0;
       const safeATime = Number.isNaN(aTime) ? 0 : aTime;
       const safeBTime = Number.isNaN(bTime) ? 0 : bTime;
       return safeBTime - safeATime || String(a?.itemName || '').localeCompare(String(b?.itemName || ''));
@@ -390,7 +426,7 @@ export default function AdminDashboard() {
     }
 
     const confirmed = window.confirm(
-      `Delete receipt row for "${row.itemName || 'Unnamed item'}" dated ${row.inputDate || 'unknown date'}?`,
+      `Delete receipt row for "${row.itemName || 'Unnamed item'}" dated ${formatDateValue(row.inputDate) || 'unknown date'}?`,
     );
 
     if (!confirmed) return;
@@ -608,9 +644,9 @@ export default function AdminDashboard() {
                 </label>
 
                 <label className="admin-field">
-                  <span className="admin-field-label">Input Date</span>
+                  <span className="admin-field-label">Input Date &amp; Time</span>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={receiptForm.inputDate}
                     onChange={(event) => setReceiptForm((current) => ({
                       ...current,
@@ -722,7 +758,7 @@ export default function AdminDashboard() {
                   <thead>
                     <tr>
                       <th>Input By</th>
-                      <th>Date</th>
+                      <th>Date &amp; Time</th>
                       <th>Category</th>
                       <th>Item Name</th>
                       <th className="table-num">Price</th>
