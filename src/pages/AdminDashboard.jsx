@@ -735,7 +735,7 @@ export default function AdminDashboard() {
             </div>
 
             {filteredReceiptRows.length > 0 ? (
-              <div className="data-table-wrap table-responsive">
+              <div className="data-table-wrap table-responsive admin-table-scroll admin-table-scroll-receipts">
                 <table className="data-table admin-table">
                   <thead>
                     <tr>
@@ -764,14 +764,14 @@ export default function AdminDashboard() {
                         <td>
                           <div className="admin-table-actions">
                             <button type="button" className="admin-action-btn" onClick={() => handleReceiptEdit(row)}>
-                              Edit
+                              Edit Row
                             </button>
                             <button
                               type="button"
                               className="admin-action-btn danger"
                               onClick={() => handleReceiptDelete(row)}
                             >
-                              Delete
+                              Delete Row
                             </button>
                           </div>
                         </td>

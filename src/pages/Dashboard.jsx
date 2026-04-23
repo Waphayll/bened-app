@@ -2514,7 +2514,6 @@ export default function Dashboard() {
                 {user?.isAdmin && (
                   <>
                     <div className="dropdown-divider" />
-                    <button type="button" className="dropdown-item">My Profile</button>
                     <button
                       type="button"
                       className="dropdown-item"

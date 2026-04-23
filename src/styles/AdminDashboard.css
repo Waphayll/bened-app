@@ -237,6 +237,7 @@
   overflow: auto;
 }
 
+.admin-table-scroll-receipts,
 .admin-table-scroll-masterlist {
   max-height: 560px;
   border: 1px solid var(--mist);
@@ -249,7 +250,28 @@
 
 .admin-table th:last-child,
 .admin-table td:last-child {
+  position: sticky;
+  right: 0;
   min-width: 150px;
+  box-shadow: -1px 0 0 var(--mist);
+}
+
+.admin-table th:last-child {
+  z-index: 3;
+  background: #f8fbf8;
+}
+
+.admin-table td:last-child {
+  z-index: 2;
+  background: rgba(255,255,255,0.98);
+}
+
+.admin-row-active td:last-child {
+  background: rgba(232,245,236,0.98);
+}
+
+.admin-table tbody tr:hover td:last-child {
+  background: #fafcfa;
 }
 
 @media (max-width: 1180px) {
@@ -285,6 +307,7 @@
     width: 100%;
   }
 
+  .admin-table-scroll-receipts,
   .admin-table-scroll-masterlist {
     max-height: 460px;
   }
@@ -313,6 +336,7 @@
     width: 100%;
   }
 
+  .admin-table-scroll-receipts,
   .admin-table-scroll-masterlist {
     max-height: 380px;
   }
