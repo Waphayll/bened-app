@@ -115,6 +115,10 @@ function resolveField(record, candidates) {
   return null;
 }
 
+function resolveRecordId(record) {
+  return resolveField(record, ['$id', 'id', 'rowId', '$rowId', '_id']);
+}
+
 function normalizeMasterlistRecord(record, source = 'table') {
   const itemType = resolveField(record, [
     'ITEM_TYPE', 'item_type', 'TYPE', 'type', 'CATEGORY', 'category',
@@ -146,7 +150,7 @@ function normalizeMasterlistRecord(record, source = 'table') {
   if (!itemType || !itemName) return null;
 
   return {
-    id: resolveField(record, ['$id', 'id']),
+    id: resolveRecordId(record),
     source,
     itemType: String(itemType).trim(),
     itemName: String(itemName).trim(),
@@ -161,7 +165,7 @@ function normalizeMasterlistRecord(record, source = 'table') {
 
 function normalizeReceiptRecord(record, source = 'table') {
   return {
-    id: resolveField(record, ['$id', 'id']),
+    id: resolveRecordId(record),
     source,
     inputBy: resolveField(record, ['INPUT_BY', 'input_by', 'inputBy']),
     inputDate: resolveField(record, ['INPUT_DATE', 'input_date', 'inputDate']),
@@ -197,7 +201,7 @@ function normalizeInventoryRecord(record, source = 'table') {
   if (!itemName) return null;
 
   return {
-    id: resolveField(record, ['$id', 'id']),
+    id: resolveRecordId(record),
     source,
     category: category ? String(category).trim() : '',
     itemName: String(itemName).trim(),

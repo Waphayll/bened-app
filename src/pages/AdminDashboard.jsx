@@ -149,6 +149,10 @@ function getReceiptFormTotal(receiptForm) {
   return roundMoney(price * quantity);
 }
 
+function canManageAppwriteRecord(row) {
+  return Boolean(row?.id && row?.source);
+}
+
 function NavLogoMark() {
   return (
     <div className="logo-mark-nav">
@@ -960,8 +964,15 @@ export default function AdminDashboard() {
               </span>
             </div>
 
+            {editingMasterlist && (
+              <div className="admin-selection-note">
+                Editing: {editingMasterlist.itemName || 'Unnamed item'}
+                {editingMasterlist.brand ? ` (${editingMasterlist.brand})` : ''}
+              </div>
+            )}
+
             {filteredMasterlistRows.length > 0 ? (
-              <div className="data-table-wrap table-responsive">
+              <div className="data-table-wrap table-responsive admin-table-scroll admin-table-scroll-masterlist">
                 <table className="data-table admin-table">
                   <thead>
                     <tr>
@@ -977,36 +988,48 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredMasterlistRows.map((row, index) => (
-                      <tr key={row.id || `${row.itemType}-${row.itemName}-${index}`}>
-                        <td>{row.itemType || 'N/A'}</td>
-                        <td>{row.itemName || 'N/A'}</td>
-                        <td>{row.unit || 'N/A'}</td>
-                        <td>{row.itemDesc || 'N/A'}</td>
-                        <td>{row.brand || 'N/A'}</td>
-                        <td className="table-num">{formatMoney(row.defaultPrice)}</td>
-                        <td>{row.measurement || 'N/A'}</td>
-                        <td className="table-num">{formatNumber(row.salesTargetPct)}</td>
-                        <td>
-                          <div className="admin-table-actions">
-                            <button
-                              type="button"
-                              className="admin-action-btn"
-                              onClick={() => handleMasterlistEdit(row)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="admin-action-btn danger"
-                              onClick={() => handleMasterlistDelete(row)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredMasterlistRows.map((row, index) => {
+                      const canManageRow = canManageAppwriteRecord(row);
+                      const isEditingRow = editingMasterlist?.id && row.id && editingMasterlist.id === row.id;
+
+                      return (
+                        <tr
+                          key={row.id || `${row.itemType}-${row.itemName}-${index}`}
+                          className={isEditingRow ? 'admin-row-active' : ''}
+                        >
+                          <td>{row.itemType || 'N/A'}</td>
+                          <td>{row.itemName || 'N/A'}</td>
+                          <td>{row.unit || 'N/A'}</td>
+                          <td>{row.itemDesc || 'N/A'}</td>
+                          <td>{row.brand || 'N/A'}</td>
+                          <td className="table-num">{formatMoney(row.defaultPrice)}</td>
+                          <td>{row.measurement || 'N/A'}</td>
+                          <td className="table-num">{formatNumber(row.salesTargetPct)}</td>
+                          <td>
+                            <div className="admin-table-actions">
+                              <button
+                                type="button"
+                                className="admin-action-btn"
+                                disabled={!canManageRow}
+                                title={canManageRow ? 'Load this masterlist row into the editor.' : 'This row is read-only because no Appwrite record ID was returned.'}
+                                onClick={() => handleMasterlistEdit(row)}
+                              >
+                                Edit Row
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-action-btn danger"
+                                disabled={!canManageRow}
+                                title={canManageRow ? 'Delete this masterlist row from Appwrite.' : 'This row is read-only because no Appwrite record ID was returned.'}
+                                onClick={() => handleMasterlistDelete(row)}
+                              >
+                                Delete Row
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
