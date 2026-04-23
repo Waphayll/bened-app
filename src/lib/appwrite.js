@@ -169,6 +169,7 @@ function normalizeReceiptRecord(record, source = 'table') {
     source,
     inputBy: resolveField(record, ['INPUT_BY', 'input_by', 'inputBy']),
     inputDate: resolveField(record, ['INPUT_DATE', 'input_date', 'inputDate']),
+    note: resolveField(record, ['NOTE', 'note', 'NOTES', 'notes']),
     itemName: resolveField(record, ['ITEM_NAME', 'item_name', 'itemName']),
     itemType: resolveField(record, ['ITEM_TYPE', 'item_type', 'itemType']),
     itemUnit: resolveField(record, ['ITEM_UNIT', 'item_unit', 'itemUnit', 'unit']),
@@ -369,6 +370,7 @@ function buildReceiptPayload(record) {
   return {
     INPUT_BY: sanitizeText(record?.INPUT_BY ?? record?.inputBy),
     INPUT_DATE: sanitizeText(record?.INPUT_DATE ?? record?.inputDate),
+    NOTE: sanitizeText(record?.NOTE ?? record?.note ?? record?.notes),
     ITEM_NAME: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
     ITEM_TYPE: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
     PRICE: sanitizeRequiredNumber(record?.PRICE ?? record?.price),

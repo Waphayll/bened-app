@@ -2,6 +2,12 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import {
+  formatReceiptDateValue,
+  getCurrentManilaDateTimeValue,
+  parseReceiptDateValue,
+  toReceiptDateTimeInputValue,
+} from '../lib/receiptDate';
+import {
   applyReceiptRowsToInventory,
   createMasterlistRecord,
   createReceiptRecord,
@@ -28,34 +34,6 @@ function roundMoney(value) {
   return Math.round(parsed * 100) / 100;
 }
 
-function padDateTimePart(value) {
-  return String(value).padStart(2, '0');
-}
-
-function getCurrentLocalDateTimeValue(date = new Date()) {
-  return [
-    date.getFullYear(),
-    padDateTimePart(date.getMonth() + 1),
-    padDateTimePart(date.getDate()),
-  ].join('-') + `T${padDateTimePart(date.getHours())}:${padDateTimePart(date.getMinutes())}`;
-}
-
-function parseReceiptDateValue(value) {
-  if (!value) return null;
-
-  const rawValue = String(value).trim();
-  const dateOnlyMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const parsed = new Date(rawValue);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 function formatMoney(value) {
   if (!Number.isFinite(Number(value))) return 'N/A';
   return `P ${Number(value).toLocaleString('en-PH', {
@@ -74,30 +52,14 @@ function formatNumber(value, fractionDigits = 2) {
 }
 
 function formatDateValue(value) {
-  if (!value) return 'N/A';
-
-  const parsed = parseReceiptDateValue(value);
-  if (!parsed) return String(value);
-
-  return /T|\d:\d/.test(String(value))
-    ? parsed.toLocaleString('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-    : parsed.toLocaleDateString('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+  return formatReceiptDateValue(value);
 }
 
 function createReceiptForm(inputBy = 'Admin') {
   return {
     inputBy,
-    inputDate: getCurrentLocalDateTimeValue(),
+    inputDate: getCurrentManilaDateTimeValue(),
+    note: '',
     itemType: '',
     itemName: '',
     price: '',
@@ -121,7 +83,8 @@ function createMasterlistForm() {
 function mapReceiptToForm(record, fallbackInputBy = 'Admin') {
   return {
     inputBy: String(record?.inputBy || fallbackInputBy),
-    inputDate: String(record?.inputDate || getCurrentLocalDateTimeValue()),
+    inputDate: toReceiptDateTimeInputValue(record?.inputDate),
+    note: String(record?.note || ''),
     itemType: String(record?.itemType || ''),
     itemName: String(record?.itemName || ''),
     price: Number.isFinite(Number(record?.price)) ? String(record.price) : '',
@@ -241,6 +204,7 @@ export default function AdminDashboard() {
       const haystack = [
         row.inputBy,
         row.inputDate,
+        row.note,
         row.itemType,
         row.itemName,
       ]
@@ -357,6 +321,7 @@ export default function AdminDashboard() {
     return {
       INPUT_BY: receiptForm.inputBy.trim(),
       INPUT_DATE: receiptForm.inputDate,
+      NOTE: receiptForm.note.trim(),
       ITEM_TYPE: receiptForm.itemType.trim(),
       ITEM_NAME: receiptForm.itemName.trim(),
       PRICE: roundMoney(Number(receiptForm.price)),
@@ -673,6 +638,19 @@ export default function AdminDashboard() {
                 </label>
 
                 <label className="admin-field admin-field-wide">
+                  <span className="admin-field-label">Note</span>
+                  <input
+                    type="text"
+                    value={receiptForm.note}
+                    onChange={(event) => setReceiptForm((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))}
+                    placeholder="Optional receipt note"
+                  />
+                </label>
+
+                <label className="admin-field admin-field-wide">
                   <span className="admin-field-label">Item Name</span>
                   <input
                     type="text"
@@ -763,6 +741,7 @@ export default function AdminDashboard() {
                     <tr>
                       <th>Input By</th>
                       <th>Date &amp; Time</th>
+                      <th>Note</th>
                       <th>Category</th>
                       <th>Item Name</th>
                       <th className="table-num">Price</th>
@@ -776,6 +755,7 @@ export default function AdminDashboard() {
                       <tr key={row.id || `${row.inputDate}-${row.itemName}-${index}`}>
                         <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
+                        <td>{row.note || 'N/A'}</td>
                         <td>{row.itemType || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>

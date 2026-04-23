@@ -16,6 +16,11 @@ import {
 import { Line, Bar, Pie } from 'react-chartjs-2';
 import { useAuth } from '../lib/AuthContext';
 import {
+  formatReceiptDateValue,
+  getCurrentManilaDateTimeValue,
+  parseReceiptDateValue,
+} from '../lib/receiptDate';
+import {
   applyReceiptRowsToInventory,
   createReceiptRecords,
   listInventoryRecords,
@@ -85,34 +90,6 @@ const RECEIPT_OCR_API_BASE = (
 ).replace(/\/$/, '');
 const MASTERLIST_CSV_URL = import.meta.env.VITE_MASTERLIST_CSV_URL || '/masterlist.csv';
 
-function padDateTimePart(value) {
-  return String(value).padStart(2, '0');
-}
-
-function getCurrentLocalDateTimeValue(date = new Date()) {
-  return [
-    date.getFullYear(),
-    padDateTimePart(date.getMonth() + 1),
-    padDateTimePart(date.getDate()),
-  ].join('-') + `T${padDateTimePart(date.getHours())}:${padDateTimePart(date.getMinutes())}`;
-}
-
-function parseReceiptDateValue(value) {
-  if (!value) return null;
-
-  const rawValue = String(value).trim();
-  const dateOnlyMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const parsed = new Date(rawValue);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 function createManualRow() {
   return {
     id: `manual-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -129,7 +106,7 @@ function createManualRow() {
 function createReceiptDraft(inputtedBy = 'User') {
   return {
     inputtedBy,
-    inputDate: getCurrentLocalDateTimeValue(),
+    inputDate: getCurrentManilaDateTimeValue(),
     notes: '',
     scannedLines: [],
     manualRows: [createManualRow()],
@@ -167,26 +144,7 @@ function formatQuantity(value) {
 }
 
 function formatDateValue(value) {
-  if (!value) return 'N/A';
-
-  const parsed = parseReceiptDateValue(value);
-  if (!parsed) return String(value);
-
-  const rawValue = String(value);
-  const hasTime = /T|\d:\d/.test(rawValue);
-  return hasTime
-    ? parsed.toLocaleString('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-    : parsed.toLocaleDateString('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+  return formatReceiptDateValue(value);
 }
 
 function normalizeLookup(value) {
@@ -2460,6 +2418,7 @@ export default function Dashboard() {
         return {
           INPUT_BY: receiptDraft.inputtedBy,
           INPUT_DATE: receiptDraft.inputDate,
+          NOTE: receiptDraft.notes,
           ITEM_NAME: selectedVariant.itemName,
           ITEM_TYPE: selectedVariant.itemType,
           ITEM_UNIT: selectedVariant.unit || '',
@@ -2914,6 +2873,7 @@ export default function Dashboard() {
                     <tr>
                       <th>Input By</th>
                       <th>Input Date &amp; Time</th>
+                      <th>Note</th>
                       <th>Item Name</th>
                       <th>Category</th>
                       <th className="table-num">Price</th>
@@ -2926,6 +2886,7 @@ export default function Dashboard() {
                       <tr key={`${row.inputDate}-${row.itemName}-${index}`}>
                         <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
+                        <td>{row.note || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
                         <td>{row.itemType || 'UNMAPPED'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>
