@@ -2450,10 +2450,24 @@ export default function Dashboard() {
             {dropdownOpen && (
               <div className="user-dropdown">
                 <div className="dropdown-meta">{user?.email}</div>
-                <div className="dropdown-divider" />
-                <button type="button" className="dropdown-item">My Profile</button>
-                <button type="button" className="dropdown-item">Settings</button>
-                <div className="dropdown-divider" />
+                {user?.isAdmin && (
+                  <>
+                    <div className="dropdown-divider" />
+                    <button type="button" className="dropdown-item">My Profile</button>
+                    <button
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        navigate('/admin');
+                      }}
+                    >
+                      Admin Control
+                    </button>
+                    <div className="dropdown-divider" />
+                  </>
+                )}
+                {!user?.isAdmin && <div className="dropdown-divider" />}
                 <button type="button" className="dropdown-item danger" onClick={handleLogout}>
                   Sign Out
                 </button>
