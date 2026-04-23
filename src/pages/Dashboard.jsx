@@ -15,6 +15,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Pie } from 'react-chartjs-2';
 import { useAuth } from '../lib/AuthContext';
+import { useAppData } from '../lib/AppDataContext';
 import {
   formatReceiptDateValue,
   getCurrentManilaDateTimeValue,
@@ -23,9 +24,6 @@ import {
 import {
   applyReceiptRowsToInventory,
   createReceiptRecords,
-  listInventoryRecords,
-  listMasterlistRecords,
-  listReceiptRecords,
 } from '../lib/appwrite';
 import '../styles/Dashboard.css';
 
@@ -88,7 +86,6 @@ const SALES_TABLE_FILTER_OPTIONS = [
 const RECEIPT_OCR_API_BASE = (
   import.meta.env.VITE_RECEIPT_OCR_API_BASE || 'http://127.0.0.1:8000'
 ).replace(/\/$/, '');
-const MASTERLIST_CSV_URL = import.meta.env.VITE_MASTERLIST_CSV_URL || '/masterlist.csv';
 
 function createManualRow() {
   return {
@@ -1797,6 +1794,17 @@ function ProductChart({ products }) {
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const {
+    receiptRows,
+    receiptError,
+    inventoryRows,
+    inventoryError,
+    masterlistRows,
+    masterlistSource,
+    masterlistError,
+    refreshReceiptData,
+    refreshInventoryData,
+  } = useAppData();
   const navigate = useNavigate();
 
   const [activeNav, setActiveNav] = useState('Dashboard');
@@ -1809,16 +1817,9 @@ export default function Dashboard() {
   const [receiptUploadError, setReceiptUploadError] = useState('');
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [isSendingReceipt, setIsSendingReceipt] = useState(false);
-  const [receiptRows, setReceiptRows] = useState([]);
-  const [receiptError, setReceiptError] = useState('');
-  const [inventoryRows, setInventoryRows] = useState([]);
-  const [inventoryError, setInventoryError] = useState('');
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('All');
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState('All');
-  const [masterlistRows, setMasterlistRows] = useState([]);
-  const [masterlistSource, setMasterlistSource] = useState('');
-  const [masterlistError, setMasterlistError] = useState('');
   const [salesTargetPeriod, setSalesTargetPeriod] = useState('day');
   const [chartPeriod, setChartPeriod] = useState('H1');
   const [summaryFilter, setSummaryFilter] = useState('All');
@@ -2066,7 +2067,6 @@ export default function Dashboard() {
     const closeOnEscape = (event) => {
       if (event.key === 'Escape') {
         setIsReceiptModalOpen(false);
-        setReceiptDragActive(false);
       }
     };
 
@@ -2083,83 +2083,6 @@ export default function Dashboard() {
       inputtedBy: displayName,
     }));
   }, [displayName]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadMasterlist = async () => {
-      setMasterlistError('');
-      try {
-        const records = await listMasterlistRecords();
-        if (!active) return;
-        if (records.length > 0) {
-          setMasterlistRows(records);
-          setMasterlistSource('database');
-          return;
-        }
-      } catch (error) {
-        if (!active) return;
-        setMasterlistError(error?.message || 'Unable to load masterlist from Appwrite database.');
-      }
-
-      try {
-        const response = await fetch(MASTERLIST_CSV_URL);
-        if (!response.ok) throw new Error(`Cannot load ${MASTERLIST_CSV_URL}`);
-        const text = await response.text();
-        const parsed = parseCsvText(text)
-          .map(normalizeMasterlistRow)
-          .filter(Boolean);
-        if (!active) return;
-        setMasterlistRows(parsed);
-        setMasterlistSource('csv');
-      } catch (error) {
-        if (!active) return;
-        setMasterlistRows([]);
-        setMasterlistError((current) => (
-          current
-            ? `${current} CSV fallback failed: ${error?.message || 'unknown error'}.`
-            : `Unable to load masterlist CSV: ${error?.message || 'unknown error'}.`
-        ));
-      }
-    };
-
-    loadMasterlist();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const refreshReceiptData = async () => {
-    setReceiptError('');
-    try {
-      const records = await listReceiptRecords();
-      setReceiptRows(records);
-    } catch (error) {
-      console.error('Unable to load receipt records for dashboard panels:', error);
-      setReceiptRows([]);
-      setReceiptError(error?.message || 'Unable to load receipt records from the database.');
-    }
-  };
-
-  useEffect(() => {
-    refreshReceiptData();
-  }, []);
-
-  const refreshInventoryData = async () => {
-    setInventoryError('');
-    try {
-      const records = await listInventoryRecords();
-      setInventoryRows(records);
-    } catch (error) {
-      console.error('Unable to load inventory records for dashboard panels:', error);
-      setInventoryRows([]);
-      setInventoryError(error?.message || 'Unable to load inventory records from the database.');
-    }
-  };
-
-  useEffect(() => {
-    refreshInventoryData();
-  }, []);
 
   const handleLogout = async () => {
     await logout();

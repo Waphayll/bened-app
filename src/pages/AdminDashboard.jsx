@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
+import { useAppData } from '../lib/AppDataContext';
 import {
   formatReceiptDateValue,
   getCurrentManilaDateTimeValue,
@@ -13,8 +14,6 @@ import {
   createReceiptRecord,
   deleteMasterlistRecord,
   deleteReceiptRecord,
-  listMasterlistRecords,
-  listReceiptRecords,
   restoreReceiptRowsToInventory,
   updateMasterlistRecord,
   updateReceiptRecord,
@@ -141,6 +140,15 @@ function AdminStatCard({ label, value, detail }) {
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const {
+    receiptRows,
+    receiptError: receiptDataError,
+    masterlistRows,
+    masterlistError: masterlistDataError,
+    refreshReceiptData,
+    refreshInventoryData,
+    refreshMasterlistData,
+  } = useAppData();
   const navigate = useNavigate();
 
   const displayName = user?.username
@@ -152,8 +160,6 @@ export default function AdminDashboard() {
     year: 'numeric',
   });
 
-  const [receiptRows, setReceiptRows] = useState([]);
-  const [masterlistRows, setMasterlistRows] = useState([]);
   const [receiptSearch, setReceiptSearch] = useState('');
   const [masterlistSearch, setMasterlistSearch] = useState('');
   const [receiptForm, setReceiptForm] = useState(() => createReceiptForm(displayName));
@@ -164,8 +170,6 @@ export default function AdminDashboard() {
   const [receiptNotice, setReceiptNotice] = useState('');
   const [masterlistError, setMasterlistError] = useState('');
   const [masterlistNotice, setMasterlistNotice] = useState('');
-  const [isLoadingReceipts, setIsLoadingReceipts] = useState(true);
-  const [isLoadingMasterlist, setIsLoadingMasterlist] = useState(true);
   const [isSavingReceipt, setIsSavingReceipt] = useState(false);
   const [isSavingMasterlist, setIsSavingMasterlist] = useState(false);
 
@@ -180,11 +184,6 @@ export default function AdminDashboard() {
       }));
     }
   }, [displayName, editingReceipt]);
-
-  useEffect(() => {
-    refreshReceiptData();
-    refreshMasterlistData();
-  }, []);
 
   const sortedReceiptRows = useMemo(() => (
     [...receiptRows].sort((a, b) => {
@@ -254,36 +253,6 @@ export default function AdminDashboard() {
   ), [masterlistRows]);
 
   const receiptFormTotal = useMemo(() => getReceiptFormTotal(receiptForm), [receiptForm]);
-
-  async function refreshReceiptData() {
-    setIsLoadingReceipts(true);
-
-    try {
-      const records = await listReceiptRecords();
-      setReceiptRows(records);
-      setReceiptError('');
-    } catch (error) {
-      setReceiptRows([]);
-      setReceiptError(error?.message || 'Unable to load receipt rows.');
-    } finally {
-      setIsLoadingReceipts(false);
-    }
-  }
-
-  async function refreshMasterlistData() {
-    setIsLoadingMasterlist(true);
-
-    try {
-      const records = await listMasterlistRecords();
-      setMasterlistRows(records);
-      setMasterlistError('');
-    } catch (error) {
-      setMasterlistRows([]);
-      setMasterlistError(error?.message || 'Unable to load masterlist rows.');
-    } finally {
-      setIsLoadingMasterlist(false);
-    }
-  }
 
   async function handleLogout() {
     await logout();
@@ -372,7 +341,7 @@ export default function AdminDashboard() {
         setReceiptNotice(`Receipt row created.${inventoryMessage}`);
       }
 
-      await refreshReceiptData();
+      await Promise.allSettled([refreshReceiptData(), refreshInventoryData()]);
       resetReceiptEditor();
     } catch (error) {
       setReceiptError(error?.message || 'Unable to save the receipt row.');
@@ -413,7 +382,7 @@ export default function AdminDashboard() {
         inventoryMessage = ` Inventory sync failed: ${inventoryError?.message || 'unknown error'}.`;
       }
 
-      await refreshReceiptData();
+      await Promise.allSettled([refreshReceiptData(), refreshInventoryData()]);
 
       if (editingReceipt?.id === row.id) {
         resetReceiptEditor();
@@ -484,7 +453,7 @@ export default function AdminDashboard() {
         setMasterlistNotice('Masterlist row created.');
       }
 
-      await refreshMasterlistData();
+      await refreshMasterlistData({ preferCache: false });
       resetMasterlistEditor();
     } catch (error) {
       setMasterlistError(error?.message || 'Unable to save the masterlist row.');
@@ -517,7 +486,7 @@ export default function AdminDashboard() {
 
     try {
       await deleteMasterlistRecord(row.id, row.source);
-      await refreshMasterlistData();
+      await refreshMasterlistData({ preferCache: false });
 
       if (editingMasterlist?.id === row.id) {
         resetMasterlistEditor();
@@ -783,9 +752,7 @@ export default function AdminDashboard() {
             ) : (
               <div className="panel-empty-state">
                 <p>
-                  {isLoadingReceipts
-                    ? 'Loading receipt rows...'
-                    : receiptError || 'No receipt rows match the current search.'}
+                  {receiptError || receiptDataError || 'No receipt rows match the current search.'}
                 </p>
               </div>
             )}
@@ -1016,9 +983,7 @@ export default function AdminDashboard() {
             ) : (
               <div className="panel-empty-state">
                 <p>
-                  {isLoadingMasterlist
-                    ? 'Loading masterlist rows...'
-                    : masterlistError || 'No masterlist rows match the current search.'}
+                  {masterlistError || masterlistDataError || 'No masterlist rows match the current search.'}
                 </p>
               </div>
             )}
