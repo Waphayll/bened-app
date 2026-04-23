@@ -42,8 +42,8 @@ export default function Login() {
 
     setLoading(true);
     try {
-      await login(email.trim(), password);
-      navigate('/dashboard');
+      const nextUser = await login(email.trim(), password);
+      navigate(nextUser?.isAdmin ? '/admin' : '/dashboard');
     } catch (loginError) {
       setError(loginError?.message || 'Unable to sign in. Please check your credentials.');
     } finally {
@@ -87,7 +87,7 @@ export default function Login() {
             {error && <div className="error-msg">{error}</div>}
             {!error && authError && <div className="error-msg">{authError}</div>}
             <div className="access-note">
-              This portal now uses Appwrite session authentication.
+              This portal now uses Appwrite session authentication and routes admin accounts to their own workspace.
             </div>
 
             {/* Email */}

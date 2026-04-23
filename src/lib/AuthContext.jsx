@@ -14,12 +14,57 @@ import {
 
 const AuthContext = createContext(null);
 
+function parseEnvList(value) {
+  return new Set(
+    String(value || '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+}
+
+const adminEmails = new Set(
+  Array.from(parseEnvList(import.meta.env.VITE_ADMIN_EMAILS || '')).map((email) => email.toLowerCase()),
+);
+const adminUserIds = parseEnvList(import.meta.env.VITE_ADMIN_USER_IDS || '');
+
+function normalizeRoleValue(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function isAdminAccount(account) {
+  const email = String(account?.email || '').trim().toLowerCase();
+  const userId = String(account?.$id || '').trim();
+  const labels = Array.isArray(account?.labels) ? account.labels : [];
+  const prefs = account?.prefs && typeof account.prefs === 'object' ? account.prefs : {};
+  const roles = Array.isArray(prefs.roles)
+    ? prefs.roles
+    : prefs.roles
+      ? [prefs.roles]
+      : [];
+  const preferenceLabels = Array.isArray(prefs.labels) ? prefs.labels : [];
+  const adminSignals = [prefs.role, ...roles, ...labels, ...preferenceLabels];
+
+  return (
+    adminEmails.has(email)
+    || adminUserIds.has(userId)
+    || prefs.isAdmin === true
+    || adminSignals.some((value) => normalizeRoleValue(value) === 'admin')
+  );
+}
+
 function mapAccountToUser(account) {
+  const isAdmin = isAdminAccount(account);
   return {
     id: account.$id,
     username: account.name || account.email?.split('@')?.[0] || 'User',
     email: account.email || '',
     user_id: account.$id,
+    isAdmin,
+    role: isAdmin ? 'admin' : 'user',
   };
 }
 
@@ -71,8 +116,9 @@ export function AuthProvider({ children }) {
     setAuthError('');
     await createEmailPasswordSession(email, password);
     const account = await getCurrentAccount();
-    setUser(mapAccountToUser(account));
-    return account;
+    const mappedUser = mapAccountToUser(account);
+    setUser(mappedUser);
+    return mappedUser;
   };
 
   const logout = async () => {

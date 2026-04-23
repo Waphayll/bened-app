@@ -115,7 +115,7 @@ function resolveField(record, candidates) {
   return null;
 }
 
-function normalizeMasterlistRecord(record) {
+function normalizeMasterlistRecord(record, source = 'table') {
   const itemType = resolveField(record, [
     'ITEM_TYPE', 'item_type', 'TYPE', 'type', 'CATEGORY', 'category',
   ]);
@@ -146,6 +146,8 @@ function normalizeMasterlistRecord(record) {
   if (!itemType || !itemName) return null;
 
   return {
+    id: resolveField(record, ['$id', 'id']),
+    source,
     itemType: String(itemType).trim(),
     itemName: String(itemName).trim(),
     unit: unit ? String(unit).trim() : '',
@@ -157,12 +159,17 @@ function normalizeMasterlistRecord(record) {
   };
 }
 
-function normalizeReceiptRecord(record) {
+function normalizeReceiptRecord(record, source = 'table') {
   return {
+    id: resolveField(record, ['$id', 'id']),
+    source,
     inputBy: resolveField(record, ['INPUT_BY', 'input_by', 'inputBy']),
     inputDate: resolveField(record, ['INPUT_DATE', 'input_date', 'inputDate']),
     itemName: resolveField(record, ['ITEM_NAME', 'item_name', 'itemName']),
     itemType: resolveField(record, ['ITEM_TYPE', 'item_type', 'itemType']),
+    itemUnit: resolveField(record, ['ITEM_UNIT', 'item_unit', 'itemUnit', 'unit']),
+    itemDesc: resolveField(record, ['ITEM_DESC', 'item_desc', 'itemDesc']),
+    brand: resolveField(record, ['BRAND', 'brand']),
     price: parseNumber(resolveField(record, ['PRICE', 'price'])),
     quantity: parseNumber(resolveField(record, ['QUANTITY', 'quantity'])),
     totalPrice: parseNumber(resolveField(record, ['TOTAL_PRICE', 'total_price', 'totalPrice'])),
@@ -250,6 +257,135 @@ async function listAllDocuments(collectionId) {
   return documents;
 }
 
+function ensureDataDatabaseConfigured() {
+  if (!dataDatabaseId) {
+    throw normalizeAppwriteError(
+      null,
+      'Missing Appwrite data database ID. Set VITE_APPWRITE_DATA_DB_ID (or VITE_APPWRITE_DB_ID).',
+    );
+  }
+}
+
+function sanitizeText(value) {
+  return String(value || '').trim();
+}
+
+function sanitizeOptionalNumber(value) {
+  const parsed = parseNumber(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sanitizeRequiredNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function createRowInTable(tableId, payload) {
+  return tablesDb.createRow({
+    databaseId: dataDatabaseId,
+    tableId,
+    rowId: ID.unique(),
+    data: payload,
+  });
+}
+
+async function createDocumentInCollection(collectionId, payload) {
+  return databases.createDocument({
+    databaseId: dataDatabaseId,
+    collectionId,
+    documentId: ID.unique(),
+    data: payload,
+  });
+}
+
+async function updateConfiguredRecord({
+  source,
+  recordId,
+  payload,
+  tableId,
+  collectionId,
+  configurationMessage,
+}) {
+  ensureDataDatabaseConfigured();
+
+  if (source === 'table' && tableId) {
+    await tablesDb.updateRow({
+      databaseId: dataDatabaseId,
+      tableId,
+      rowId: recordId,
+      data: payload,
+    });
+    return;
+  }
+
+  if (source === 'collection' && collectionId) {
+    await databases.updateDocument({
+      databaseId: dataDatabaseId,
+      collectionId,
+      documentId: recordId,
+      data: payload,
+    });
+    return;
+  }
+
+  throw normalizeAppwriteError(null, configurationMessage);
+}
+
+async function deleteConfiguredRecord({
+  source,
+  recordId,
+  tableId,
+  collectionId,
+  configurationMessage,
+}) {
+  ensureDataDatabaseConfigured();
+
+  if (source === 'table' && tableId) {
+    await tablesDb.deleteRow({
+      databaseId: dataDatabaseId,
+      tableId,
+      rowId: recordId,
+    });
+    return;
+  }
+
+  if (source === 'collection' && collectionId) {
+    await databases.deleteDocument({
+      databaseId: dataDatabaseId,
+      collectionId,
+      documentId: recordId,
+    });
+    return;
+  }
+
+  throw normalizeAppwriteError(null, configurationMessage);
+}
+
+function buildReceiptPayload(record) {
+  return {
+    INPUT_BY: sanitizeText(record?.INPUT_BY ?? record?.inputBy),
+    INPUT_DATE: sanitizeText(record?.INPUT_DATE ?? record?.inputDate),
+    ITEM_NAME: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
+    ITEM_TYPE: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
+    PRICE: sanitizeRequiredNumber(record?.PRICE ?? record?.price),
+    QUANTITY: sanitizeRequiredNumber(record?.QUANTITY ?? record?.quantity),
+    TOTAL_PRICE: sanitizeRequiredNumber(record?.TOTAL_PRICE ?? record?.totalPrice),
+  };
+}
+
+function buildMasterlistPayload(record) {
+  return {
+    ITEM_TYPE: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
+    ITEM_NAME: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
+    ITEM_UNIT: sanitizeText(record?.ITEM_UNIT ?? record?.unit),
+    ITEM_DESC: sanitizeText(record?.ITEM_DESC ?? record?.itemDesc),
+    BRAND: sanitizeText(record?.BRAND ?? record?.brand),
+    DEFAULT_PRICE: sanitizeOptionalNumber(record?.DEFAULT_PRICE ?? record?.defaultPrice),
+    MEASUREMENT: sanitizeText(record?.MEASUREMENT ?? record?.measurement),
+    SALES_TARGET_PCT: sanitizeOptionalNumber(record?.SALES_TARGET_PCT ?? record?.salesTargetPct),
+  };
+}
+
 export async function pingAppwrite() {
   try {
     return await client.ping();
@@ -283,19 +419,14 @@ export async function deleteCurrentSession() {
 }
 
 export async function listMasterlistRecords() {
-  if (!dataDatabaseId) {
-    throw normalizeAppwriteError(
-      null,
-      'Missing Appwrite data database ID. Set VITE_APPWRITE_DATA_DB_ID (or VITE_APPWRITE_DB_ID).',
-    );
-  }
+  ensureDataDatabaseConfigured();
 
   const errors = [];
 
   if (masterlistTableId) {
     try {
       const rows = await listAllTableRows(masterlistTableId);
-      return rows.map(normalizeMasterlistRecord).filter(Boolean);
+      return rows.map((row) => normalizeMasterlistRecord(row, 'table')).filter(Boolean);
     } catch (error) {
       errors.push(error);
     }
@@ -304,7 +435,7 @@ export async function listMasterlistRecords() {
   if (masterlistCollectionId) {
     try {
       const documents = await listAllDocuments(masterlistCollectionId);
-      return documents.map(normalizeMasterlistRecord).filter(Boolean);
+      return documents.map((document) => normalizeMasterlistRecord(document, 'collection')).filter(Boolean);
     } catch (error) {
       errors.push(error);
     }
@@ -326,7 +457,7 @@ export async function listReceiptRecords() {
   if (receiptsTableId) {
     try {
       const rows = await listAllTableRows(receiptsTableId);
-      return rows.map(normalizeReceiptRecord);
+      return rows.map((row) => normalizeReceiptRecord(row, 'table'));
     } catch (error) {
       errors.push(error);
     }
@@ -335,7 +466,7 @@ export async function listReceiptRecords() {
   if (receiptsCollectionId) {
     try {
       const documents = await listAllDocuments(receiptsCollectionId);
-      return documents.map(normalizeReceiptRecord);
+      return documents.map((document) => normalizeReceiptRecord(document, 'collection'));
     } catch (error) {
       errors.push(error);
     }
@@ -384,37 +515,19 @@ export async function listInventoryRecords() {
 }
 
 async function updateInventoryRecord(recordId, nextCurrentInv, source = 'table') {
-  const payload = {
-    CURRENT_INV: nextCurrentInv,
-  };
-
-  if (source === 'table' && inventoryTableId) {
-    await tablesDb.updateRow({
-      databaseId: dataDatabaseId,
-      tableId: inventoryTableId,
-      rowId: recordId,
-      data: payload,
-    });
-    return;
-  }
-
-  if (source === 'collection' && inventoryCollectionId) {
-    await databases.updateDocument({
-      databaseId: dataDatabaseId,
-      collectionId: inventoryCollectionId,
-      documentId: recordId,
-      data: payload,
-    });
-    return;
-  }
-
-  throw normalizeAppwriteError(
-    null,
-    'Inventory source is not configured. Set VITE_APPWRITE_INVENTORY_TABLE_ID or VITE_APPWRITE_INVENTORY_COLLECTION_ID.',
-  );
+  await updateConfiguredRecord({
+    source,
+    recordId,
+    payload: {
+      CURRENT_INV: nextCurrentInv,
+    },
+    tableId: inventoryTableId,
+    collectionId: inventoryCollectionId,
+    configurationMessage: 'Inventory source is not configured. Set VITE_APPWRITE_INVENTORY_TABLE_ID or VITE_APPWRITE_INVENTORY_COLLECTION_ID.',
+  });
 }
 
-export async function applyReceiptRowsToInventory(receiptRows) {
+async function syncReceiptRowsWithInventory(receiptRows, mode = 'decrement') {
   if (!Array.isArray(receiptRows) || receiptRows.length === 0) {
     return {
       matchedItemCount: 0,
@@ -538,7 +651,8 @@ export async function applyReceiptRowsToInventory(receiptRows) {
     }
 
     const baselineCurrent = matches.find((match) => Number.isFinite(match.currentInv))?.currentInv ?? 0;
-    const nextCurrentInv = Math.max(0, baselineCurrent - quantity);
+    const inventoryDelta = mode === 'increment' ? quantity : -quantity;
+    const nextCurrentInv = Math.max(0, baselineCurrent + inventoryDelta);
 
     for (const match of matches) {
       if (!match.id) continue;
@@ -557,27 +671,22 @@ export async function applyReceiptRowsToInventory(receiptRows) {
   };
 }
 
+export async function applyReceiptRowsToInventory(receiptRows) {
+  return syncReceiptRowsWithInventory(receiptRows, 'decrement');
+}
+
+export async function restoreReceiptRowsToInventory(receiptRows) {
+  return syncReceiptRowsWithInventory(receiptRows, 'increment');
+}
+
 export async function createReceiptRecords(records) {
   if (!Array.isArray(records) || records.length === 0) {
     return 0;
   }
 
-  if (!dataDatabaseId) {
-    throw normalizeAppwriteError(
-      null,
-      'Missing Appwrite data database ID. Set VITE_APPWRITE_DATA_DB_ID (or VITE_APPWRITE_DB_ID).',
-    );
-  }
+  ensureDataDatabaseConfigured();
 
-  const payloads = records.map((record) => ({
-    INPUT_BY: String(record.INPUT_BY || '').trim(),
-    INPUT_DATE: String(record.INPUT_DATE || '').trim(),
-    ITEM_NAME: String(record.ITEM_NAME || '').trim(),
-    ITEM_TYPE: String(record.ITEM_TYPE || '').trim(),
-    PRICE: Number(record.PRICE || 0),
-    QUANTITY: Number(record.QUANTITY || 0),
-    TOTAL_PRICE: Number(record.TOTAL_PRICE || 0),
-  }));
+  const payloads = records.map(buildReceiptPayload);
 
   const errors = [];
   let created = 0;
@@ -585,12 +694,7 @@ export async function createReceiptRecords(records) {
   if (receiptsTableId) {
     try {
       for (const payload of payloads) {
-        await tablesDb.createRow({
-          databaseId: dataDatabaseId,
-          tableId: receiptsTableId,
-          rowId: ID.unique(),
-          data: payload,
-        });
+        await createRowInTable(receiptsTableId, payload);
         created += 1;
       }
       return created;
@@ -603,12 +707,7 @@ export async function createReceiptRecords(records) {
   if (receiptsCollectionId) {
     try {
       for (const payload of payloads) {
-        await databases.createDocument({
-          databaseId: dataDatabaseId,
-          collectionId: receiptsCollectionId,
-          documentId: ID.unique(),
-          data: payload,
-        });
+        await createDocumentInCollection(receiptsCollectionId, payload);
         created += 1;
       }
       return created;
@@ -622,4 +721,81 @@ export async function createReceiptRecords(records) {
     errors[0],
     'Receipts destination is not configured. Set VITE_APPWRITE_RECEIPTS_TABLE_ID or VITE_APPWRITE_RECEIPTS_COLLECTION_ID.',
   );
+}
+
+export async function createReceiptRecord(record) {
+  const created = await createReceiptRecords([record]);
+  return created === 1;
+}
+
+export async function updateReceiptRecord(recordId, source, record) {
+  await updateConfiguredRecord({
+    source,
+    recordId,
+    payload: buildReceiptPayload(record),
+    tableId: receiptsTableId,
+    collectionId: receiptsCollectionId,
+    configurationMessage: 'Receipts destination is not configured. Set VITE_APPWRITE_RECEIPTS_TABLE_ID or VITE_APPWRITE_RECEIPTS_COLLECTION_ID.',
+  });
+}
+
+export async function deleteReceiptRecord(recordId, source) {
+  await deleteConfiguredRecord({
+    source,
+    recordId,
+    tableId: receiptsTableId,
+    collectionId: receiptsCollectionId,
+    configurationMessage: 'Receipts destination is not configured. Set VITE_APPWRITE_RECEIPTS_TABLE_ID or VITE_APPWRITE_RECEIPTS_COLLECTION_ID.',
+  });
+}
+
+export async function createMasterlistRecord(record) {
+  ensureDataDatabaseConfigured();
+
+  const payload = buildMasterlistPayload(record);
+  const errors = [];
+
+  if (masterlistTableId) {
+    try {
+      await createRowInTable(masterlistTableId, payload);
+      return true;
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (masterlistCollectionId) {
+    try {
+      await createDocumentInCollection(masterlistCollectionId, payload);
+      return true;
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  throw normalizeAppwriteError(
+    errors[0],
+    'Masterlist source is not configured. Set VITE_APPWRITE_MASTERLIST_TABLE_ID or VITE_APPWRITE_MASTERLIST_COLLECTION_ID.',
+  );
+}
+
+export async function updateMasterlistRecord(recordId, source, record) {
+  await updateConfiguredRecord({
+    source,
+    recordId,
+    payload: buildMasterlistPayload(record),
+    tableId: masterlistTableId,
+    collectionId: masterlistCollectionId,
+    configurationMessage: 'Masterlist source is not configured. Set VITE_APPWRITE_MASTERLIST_TABLE_ID or VITE_APPWRITE_MASTERLIST_COLLECTION_ID.',
+  });
+}
+
+export async function deleteMasterlistRecord(recordId, source) {
+  await deleteConfiguredRecord({
+    source,
+    recordId,
+    tableId: masterlistTableId,
+    collectionId: masterlistCollectionId,
+    configurationMessage: 'Masterlist source is not configured. Set VITE_APPWRITE_MASTERLIST_TABLE_ID or VITE_APPWRITE_MASTERLIST_COLLECTION_ID.',
+  });
 }
