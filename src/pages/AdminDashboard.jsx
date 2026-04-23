@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { useAppData } from '../lib/AppDataContext';
@@ -162,6 +162,8 @@ export default function AdminDashboard() {
 
   const [receiptSearch, setReceiptSearch] = useState('');
   const [masterlistSearch, setMasterlistSearch] = useState('');
+  const [masterlistTypeFilter, setMasterlistTypeFilter] = useState('All');
+  const [masterlistBrandFilter, setMasterlistBrandFilter] = useState('All');
   const [receiptForm, setReceiptForm] = useState(() => createReceiptForm(displayName));
   const [masterlistForm, setMasterlistForm] = useState(() => createMasterlistForm());
   const [editingReceipt, setEditingReceipt] = useState(null);
@@ -223,11 +225,26 @@ export default function AdminDashboard() {
     ))
   ), [masterlistRows]);
 
+  const masterlistTypeOptions = useMemo(() => (
+    Array.from(new Set(masterlistRows.map((row) => row.itemType).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+  ), [masterlistRows]);
+
+  const masterlistBrandOptions = useMemo(() => (
+    Array.from(new Set(masterlistRows.map((row) => row.brand).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+  ), [masterlistRows]);
+
   const filteredMasterlistRows = useMemo(() => {
     const needle = normalizeLookup(deferredMasterlistSearch);
-    if (!needle) return sortedMasterlistRows;
 
     return sortedMasterlistRows.filter((row) => {
+      const matchesType = masterlistTypeFilter === 'All' || row.itemType === masterlistTypeFilter;
+      const matchesBrand = masterlistBrandFilter === 'All' || row.brand === masterlistBrandFilter;
+      if (!matchesType || !matchesBrand) return false;
+
+      if (!needle) return true;
+
       const haystack = [
         row.itemType,
         row.itemName,
@@ -242,7 +259,40 @@ export default function AdminDashboard() {
 
       return haystack.includes(needle);
     });
-  }, [deferredMasterlistSearch, sortedMasterlistRows]);
+  }, [deferredMasterlistSearch, masterlistBrandFilter, masterlistTypeFilter, sortedMasterlistRows]);
+
+  const filteredMasterlistCountLabel = filteredMasterlistRows.length;
+
+  const handleMasterlistTypeChange = (value) => {
+    startTransition(() => {
+      setMasterlistTypeFilter(value);
+    });
+  };
+
+  const handleMasterlistBrandChange = (value) => {
+    startTransition(() => {
+      setMasterlistBrandFilter(value);
+    });
+  };
+
+  const handleMasterlistSearchChange = (value) => {
+    startTransition(() => {
+      setMasterlistSearch(value);
+    });
+  };
+
+  const resetMasterlistFilters = () => {
+    startTransition(() => {
+      setMasterlistSearch('');
+      setMasterlistTypeFilter('All');
+      setMasterlistBrandFilter('All');
+    });
+  };
+
+  const masterlistFilterSummary = [
+    masterlistTypeFilter !== 'All' ? masterlistTypeFilter : null,
+    masterlistBrandFilter !== 'All' ? masterlistBrandFilter : null,
+  ].filter(Boolean).join(' · ');
 
   const totalReceiptRevenue = useMemo(() => (
     roundMoney(receiptRows.reduce((total, row) => total + Number(row?.totalPrice || 0), 0))
@@ -902,14 +952,48 @@ export default function AdminDashboard() {
                 <input
                   type="search"
                   value={masterlistSearch}
-                  onChange={(event) => setMasterlistSearch(event.target.value)}
+                  onChange={(event) => handleMasterlistSearchChange(event.target.value)}
                   placeholder="Search by type, item, brand, unit, or description"
                 />
               </label>
+              <label className="admin-filter-field">
+                <span className="admin-search-label">Item Type</span>
+                <select
+                  value={masterlistTypeFilter}
+                  onChange={(event) => handleMasterlistTypeChange(event.target.value)}
+                >
+                  <option value="All">All Types</option>
+                  {masterlistTypeOptions.map((itemType) => (
+                    <option key={itemType} value={itemType}>{itemType}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-filter-field">
+                <span className="admin-search-label">Brand</span>
+                <select
+                  value={masterlistBrandFilter}
+                  onChange={(event) => handleMasterlistBrandChange(event.target.value)}
+                >
+                  <option value="All">All Brands</option>
+                  {masterlistBrandOptions.map((brand) => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="btn-outline admin-filter-reset-btn" onClick={resetMasterlistFilters}>
+                Reset Filters
+              </button>
               <span className="admin-result-count">
-                {filteredMasterlistRows.length.toLocaleString()} visible item{filteredMasterlistRows.length === 1 ? '' : 's'}
+                {filteredMasterlistCountLabel.toLocaleString()} visible item{filteredMasterlistCountLabel === 1 ? '' : 's'}
               </span>
             </div>
+
+            {(masterlistFilterSummary || deferredMasterlistSearch) && (
+              <div className="admin-selection-note">
+                Filtered by: {masterlistFilterSummary || 'Search only'}
+                {deferredMasterlistSearch ? ` · search: "${masterlistSearch}"` : ''}
+              </div>
+            )}
 
             {editingMasterlist && (
               <div className="admin-selection-note">

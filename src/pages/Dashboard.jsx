@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
@@ -82,6 +82,7 @@ const SALES_TABLE_FILTER_OPTIONS = [
   { value: 'year', label: 'This Year' },
   { value: 'last30', label: 'Last 30 Days' },
 ];
+const INVENTORY_PAGE_SIZE_OPTIONS = [50, 100, 250];
 
 const RECEIPT_OCR_API_BASE = (
   import.meta.env.VITE_RECEIPT_OCR_API_BASE || 'http://127.0.0.1:8000'
@@ -1820,6 +1821,8 @@ export default function Dashboard() {
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('All');
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState('All');
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryPageSize, setInventoryPageSize] = useState(100);
   const [salesTargetPeriod, setSalesTargetPeriod] = useState('day');
   const [chartPeriod, setChartPeriod] = useState('H1');
   const [summaryFilter, setSummaryFilter] = useState('All');
@@ -1931,8 +1934,8 @@ export default function Dashboard() {
   ), [inventoryRows, inventoryTableRows]);
 
   const manualCatalogRows = useMemo(() => (
-    deriveManualCatalogRows(masterlistRows, inventoryRows)
-  ), [inventoryRows, masterlistRows]);
+    isReceiptModalOpen ? deriveManualCatalogRows(masterlistRows, inventoryRows) : []
+  ), [inventoryRows, isReceiptModalOpen, masterlistRows]);
 
   const itemTypeOptions = useMemo(() => (
     Array.from(new Set(manualCatalogRows.map((row) => row.itemType).filter(Boolean)))
@@ -2020,6 +2023,22 @@ export default function Dashboard() {
     });
   }, [deferredInventorySearch, inventoryCategoryFilter, inventoryStatusFilter, inventoryTableRows]);
 
+  const inventoryPageCount = useMemo(() => (
+    Math.max(1, Math.ceil(filteredInventoryRows.length / inventoryPageSize))
+  ), [filteredInventoryRows.length, inventoryPageSize]);
+
+  const visibleInventoryRows = useMemo(() => {
+    const pageStart = (inventoryPage - 1) * inventoryPageSize;
+    return filteredInventoryRows.slice(pageStart, pageStart + inventoryPageSize);
+  }, [filteredInventoryRows, inventoryPage, inventoryPageSize]);
+
+  const inventoryRangeStart = filteredInventoryRows.length === 0
+    ? 0
+    : ((inventoryPage - 1) * inventoryPageSize) + 1;
+  const inventoryRangeEnd = filteredInventoryRows.length === 0
+    ? 0
+    : Math.min(filteredInventoryRows.length, inventoryPage * inventoryPageSize);
+
   const totalOrdersInGraphWindow = useMemo(() => (
     displayedOrderCounts.reduce((total, value) => total + value, 0)
   ), [displayedOrderCounts]);
@@ -2084,9 +2103,43 @@ export default function Dashboard() {
     }));
   }, [displayName]);
 
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [inventoryCategoryFilter, inventoryPageSize, inventorySearch, inventoryStatusFilter]);
+
+  useEffect(() => {
+    if (inventoryPage > inventoryPageCount) {
+      setInventoryPage(inventoryPageCount);
+    }
+  }, [inventoryPage, inventoryPageCount]);
+
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleInventorySearchChange = (value) => {
+    startTransition(() => {
+      setInventorySearch(value);
+    });
+  };
+
+  const handleInventoryCategoryChange = (value) => {
+    startTransition(() => {
+      setInventoryCategoryFilter(value);
+    });
+  };
+
+  const handleInventoryStatusChange = (value) => {
+    startTransition(() => {
+      setInventoryStatusFilter(value);
+    });
+  };
+
+  const handleInventoryPageSizeChange = (value) => {
+    startTransition(() => {
+      setInventoryPageSize(Number(value));
+    });
   };
 
   const openReceiptModal = () => {
@@ -2842,7 +2895,7 @@ export default function Dashboard() {
                   <input
                     type="search"
                     value={inventorySearch}
-                    onChange={(event) => setInventorySearch(event.target.value)}
+                    onChange={(event) => handleInventorySearchChange(event.target.value)}
                     placeholder="Item, brand, description..."
                   />
                 </label>
@@ -2851,7 +2904,7 @@ export default function Dashboard() {
                   <span className="inventory-filter-label">Category</span>
                   <select
                     value={inventoryCategoryFilter}
-                    onChange={(event) => setInventoryCategoryFilter(event.target.value)}
+                    onChange={(event) => handleInventoryCategoryChange(event.target.value)}
                   >
                     <option value="All">All Categories</option>
                     {inventoryCategories.map((category) => (
@@ -2864,11 +2917,23 @@ export default function Dashboard() {
                   <span className="inventory-filter-label">Status</span>
                   <select
                     value={inventoryStatusFilter}
-                    onChange={(event) => setInventoryStatusFilter(event.target.value)}
+                    onChange={(event) => handleInventoryStatusChange(event.target.value)}
                   >
                     <option value="All">All Statuses</option>
                     {['Sufficient', 'Moderate', 'Low Stock', 'Tracked', 'No Data'].map((status) => (
                       <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inventory-filter-field">
+                  <span className="inventory-filter-label">Rows Per Page</span>
+                  <select
+                    value={inventoryPageSize}
+                    onChange={(event) => handleInventoryPageSizeChange(event.target.value)}
+                  >
+                    {INVENTORY_PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>{size}</option>
                     ))}
                   </select>
                 </label>
@@ -2882,9 +2947,12 @@ export default function Dashboard() {
                   type="button"
                   className="btn-outline inventory-reset-btn"
                   onClick={() => {
-                    setInventorySearch('');
-                    setInventoryCategoryFilter('All');
-                    setInventoryStatusFilter('All');
+                    startTransition(() => {
+                      setInventorySearch('');
+                      setInventoryCategoryFilter('All');
+                      setInventoryStatusFilter('All');
+                      setInventoryPageSize(100);
+                    });
                   }}
                 >
                   Reset Filters
@@ -2898,6 +2966,32 @@ export default function Dashboard() {
                   <div className="panel-title">Masterlist With Inventory Quantity</div>
                   <div className="panel-sub">
                     {filteredInventoryRows.length.toLocaleString()} visible item{filteredInventoryRows.length === 1 ? '' : 's'} · masterlist source: {masterlistSource || 'unavailable'}
+                  </div>
+                </div>
+                <div className="inventory-table-toolbar">
+                  <span className="inventory-table-summary">
+                    Showing {inventoryRangeStart.toLocaleString()}-{inventoryRangeEnd.toLocaleString()} of {filteredInventoryRows.length.toLocaleString()}
+                  </span>
+                  <div className="inventory-page-controls">
+                    <button
+                      type="button"
+                      className="btn-outline inventory-page-btn"
+                      disabled={inventoryPage <= 1}
+                      onClick={() => setInventoryPage((current) => Math.max(1, current - 1))}
+                    >
+                      Prev
+                    </button>
+                    <span className="inventory-page-status">
+                      Page {inventoryPage.toLocaleString()} of {inventoryPageCount.toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-outline inventory-page-btn"
+                      disabled={inventoryPage >= inventoryPageCount}
+                      onClick={() => setInventoryPage((current) => Math.min(inventoryPageCount, current + 1))}
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2921,10 +3015,10 @@ export default function Dashboard() {
                         <th>Measure</th>
                         <th className="table-num">Current Qty</th>
                         <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredInventoryRows.map((row, index) => (
+                    </tr>
+                  </thead>
+                  <tbody>
+                      {visibleInventoryRows.map((row, index) => (
                         <tr key={`${row.itemType}-${row.itemName}-${index}`}>
                           <td>{row.itemType || 'N/A'}</td>
                           <td>{row.itemName || 'N/A'}</td>

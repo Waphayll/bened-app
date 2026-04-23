@@ -917,6 +917,32 @@
   width: 100%;
 }
 
+.inventory-table-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.inventory-table-summary,
+.inventory-page-status {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: var(--mid);
+}
+
+.inventory-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-page-btn {
+  min-width: 72px;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
 .inventory-status-cell {
   min-width: 120px;
   cursor: help;
@@ -1818,6 +1844,13 @@
   }
   .panel-header-controls {
     width: 100%;
+  }
+  .inventory-table-toolbar {
+    width: 100%;
+    align-items: flex-start;
+  }
+  .inventory-page-controls {
+    flex-wrap: wrap;
   }
   .chart-area {
     padding-left: 16px;
