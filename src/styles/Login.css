@@ -38,10 +38,6 @@
   color: var(--green-deep);
 }
 
-.login-text-size-toggle {
-  margin-left: auto;
-}
-
 /* ── Left column ── */
 .col-left {
   grid-column: 1;

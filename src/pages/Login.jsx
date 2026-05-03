@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import TextSizeToggle from '../components/TextSizeToggle';
 import { useAuth } from '../lib/AuthContext';
 import '../styles/Login.css';
 
@@ -24,11 +23,6 @@ export default function Login() {
   const [remember,  setRemember]  = useState(false);
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
-
-  useEffect(() => {
-    document.body.classList.add('login-body');
-    return () => document.body.classList.remove('login-body');
-  }, []);
 
   const handleLogin = async (e) => {
     e?.preventDefault();
@@ -63,7 +57,6 @@ export default function Login() {
       {/* TOP BAR */}
       <header className="topbar">
         <span className="topbar-brand">Bened Industrial Group</span>
-        <TextSizeToggle className="login-text-size-toggle" />
       </header>
 
       {/* LEFT COLUMN */}

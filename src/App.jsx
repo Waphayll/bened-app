@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import { AppDataProvider, useAppData } from './lib/AppDataContext';
-import { UiPreferencesProvider } from './lib/UiPreferencesContext';
 import { pingAppwrite } from './lib/appwrite';
 
 const Login = lazy(() => import('./pages/Login'));
@@ -68,22 +67,20 @@ export default function App() {
   }, []);
 
   return (
-    <UiPreferencesProvider>
-      <AuthProvider>
-        <AppDataProvider>
-          <BrowserRouter>
-            <Suspense fallback={<RouteLoading />}>
-              <Routes>
-                <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-                <Route path="*" element={<Navigate to="/login" replace />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        </AppDataProvider>
-      </AuthProvider>
-    </UiPreferencesProvider>
+    <AuthProvider>
+      <AppDataProvider>
+        <BrowserRouter>
+          <Suspense fallback={<RouteLoading />}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </AppDataProvider>
+    </AuthProvider>
   );
 }

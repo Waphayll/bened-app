@@ -1,8 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SpreadsheetGrid from '../components/SpreadsheetGrid';
-import TextSizeToggle from '../components/TextSizeToggle';
-import TypeaheadSelect from '../components/TypeaheadSelect';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -20,11 +17,9 @@ import { Line, Bar, Pie } from 'react-chartjs-2';
 import { useAuth } from '../lib/AuthContext';
 import { useAppData } from '../lib/AppDataContext';
 import {
-  combineReceiptDateAndTime,
   formatReceiptDateValue,
   getCurrentManilaDateTimeValue,
   parseReceiptDateValue,
-  splitReceiptDateTimeInputValue,
 } from '../lib/receiptDate';
 import {
   applyReceiptRowsToInventory,
@@ -107,12 +102,10 @@ function createManualRow() {
 }
 
 function createReceiptDraft(inputtedBy = 'User') {
-  const currentDateTime = splitReceiptDateTimeInputValue(getCurrentManilaDateTimeValue());
-
   return {
     inputtedBy,
-    inputDate: currentDateTime.date,
-    inputTime: currentDateTime.time,
+    inputDate: getCurrentManilaDateTimeValue(),
+    notes: '',
     scannedLines: [],
     manualRows: [createManualRow()],
   };
@@ -1820,7 +1813,6 @@ export default function Dashboard() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptDraft, setReceiptDraft] = useState(() => createReceiptDraft('User'));
-  const [manualItemSearchByRow, setManualItemSearchByRow] = useState({});
   const [orderFeedback, setOrderFeedback] = useState('');
   const [orderFormError, setOrderFormError] = useState('');
   const [receiptUploadError, setReceiptUploadError] = useState('');
@@ -2065,56 +2057,6 @@ export default function Dashboard() {
 
   const showReceiptActions = activeNav !== 'Inventory';
 
-  const inventoryGridColumns = [
-    {
-      key: 'rowNumber',
-      label: '#',
-      width: '72px',
-      align: 'end',
-      render: (_row, index) => String(inventoryRangeStart + index).padStart(3, '0'),
-    },
-    { key: 'itemType', label: 'Category', width: 'minmax(150px, 1fr)' },
-    { key: 'itemName', label: 'Item Name', width: 'minmax(240px, 1.5fr)' },
-    { key: 'unit', label: 'Item Unit', width: 'minmax(120px, 0.8fr)' },
-    { key: 'itemDesc', label: 'Description', width: 'minmax(220px, 1.4fr)' },
-    { key: 'brand', label: 'Brand', width: 'minmax(160px, 1fr)' },
-    {
-      key: 'defaultPrice',
-      label: 'Price',
-      width: 'minmax(130px, 0.9fr)',
-      align: 'end',
-      render: (row) => formatMoney(row.defaultPrice),
-    },
-    { key: 'measurement', label: 'Measure', width: 'minmax(150px, 1fr)' },
-    {
-      key: 'currentInv',
-      label: 'Current Qty',
-      width: 'minmax(130px, 0.9fr)',
-      align: 'end',
-      render: (row) => formatQuantity(row.currentInv),
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      width: 'minmax(190px, 1fr)',
-      render: (row) => (
-        <div
-          className="inventory-sheet-status"
-          title={getInventoryStatusHelp(row)}
-          aria-label={getInventoryStatusHelp(row)}
-        >
-          <span className="inventory-sheet-status-label">{row.inventoryLabel}</span>
-          <div className="inventory-status-track">
-            <div
-              className={`inventory-status-fill ${row.inventoryBadge}`}
-              style={{ width: `${row.inventoryPct}%` }}
-            />
-          </div>
-        </div>
-      ),
-    },
-  ];
-
   const cycleSalesTargetPeriod = () => {
     setSalesTargetPeriod((current) => getNextSalesTargetPeriod(current));
   };
@@ -2203,7 +2145,6 @@ export default function Dashboard() {
   const openReceiptModal = () => {
     setDropdownOpen(false);
     setReceiptDraft(createReceiptDraft(displayName));
-    setManualItemSearchByRow({});
     setOrderFormError('');
     setReceiptUploadError('');
     setOrderFeedback('');
@@ -2212,7 +2153,6 @@ export default function Dashboard() {
 
   const closeReceiptModal = () => {
     setIsReceiptModalOpen(false);
-    setManualItemSearchByRow({});
     setOrderFormError('');
     setReceiptUploadError('');
     setIsSendingReceipt(false);
@@ -2233,30 +2173,8 @@ export default function Dashboard() {
   };
 
   const handleManualItemTypeChange = (rowId, itemType) => {
-    setManualItemSearchByRow((current) => ({
-      ...current,
-      [rowId]: '',
-    }));
     updateManualRow(rowId, {
       itemType,
-      itemName: '',
-      unit: UNSET_MANUAL_VARIANT_VALUE,
-      itemDesc: UNSET_MANUAL_VARIANT_VALUE,
-      brand: UNSET_MANUAL_VARIANT_VALUE,
-      price: '',
-    });
-  };
-
-  const handleManualItemSearchChange = (rowId, query) => {
-    setManualItemSearchByRow((current) => ({
-      ...current,
-      [rowId]: query,
-    }));
-
-    const row = receiptDraft.manualRows.find((item) => item.id === rowId);
-    if (!row || query === row.itemName) return;
-
-    updateManualRow(rowId, {
       itemName: '',
       unit: UNSET_MANUAL_VARIANT_VALUE,
       itemDesc: UNSET_MANUAL_VARIANT_VALUE,
@@ -2274,10 +2192,6 @@ export default function Dashboard() {
       brand: UNSET_MANUAL_VARIANT_VALUE,
     });
     const selected = resolveExactManualVariant(variants, nextSelection);
-    setManualItemSearchByRow((current) => ({
-      ...current,
-      [rowId]: itemName,
-    }));
     updateManualRow(rowId, {
       itemName,
       unit: nextSelection.unit,
@@ -2320,12 +2234,6 @@ export default function Dashboard() {
   };
 
   const removeManualRow = (rowId) => {
-    setManualItemSearchByRow((current) => {
-      const nextState = { ...current };
-      delete nextState[rowId];
-      return nextState;
-    });
-
     setReceiptDraft((prev) => {
       if (prev.manualRows.length === 1) return prev;
       return {
@@ -2445,17 +2353,6 @@ export default function Dashboard() {
     if (isSendingReceipt) return;
 
     setOrderFormError('');
-
-    if (!receiptDraft.inputDate) {
-      setOrderFormError('Select a receipt date before sending rows.');
-      return;
-    }
-
-    if (!receiptDraft.inputTime) {
-      setOrderFormError('Select a receipt time before sending rows.');
-      return;
-    }
-
     let rowsToCreate = [];
 
     const manualErrors = [];
@@ -2496,7 +2393,8 @@ export default function Dashboard() {
         const totalPrice = roundMoney(price * quantity);
         return {
           INPUT_BY: receiptDraft.inputtedBy,
-          INPUT_DATE: combineReceiptDateAndTime(receiptDraft.inputDate, receiptDraft.inputTime),
+          INPUT_DATE: receiptDraft.inputDate,
+          NOTE: receiptDraft.notes,
           ITEM_NAME: selectedVariant.itemName,
           ITEM_TYPE: selectedVariant.itemType,
           ITEM_UNIT: selectedVariant.unit || '',
@@ -2576,7 +2474,6 @@ export default function Dashboard() {
         </div>
 
         <div className="topnav-right">
-          <TextSizeToggle className="topbar-text-size-toggle" />
           <div className="nav-date">{dateStr}</div>
           <div className="nav-divider" />
 
@@ -2951,9 +2848,9 @@ export default function Dashboard() {
                     <tr>
                       <th>Input By</th>
                       <th>Input Date &amp; Time</th>
+                      <th>Note</th>
                       <th>Item Name</th>
                       <th>Category</th>
-                      <th>Unit</th>
                       <th className="table-num">Price</th>
                       <th className="table-num">Quantity</th>
                       <th className="table-num">Total Price</th>
@@ -2964,9 +2861,9 @@ export default function Dashboard() {
                       <tr key={`${row.inputDate}-${row.itemName}-${index}`}>
                         <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
+                        <td>{row.note || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
                         <td>{row.itemType || 'UNMAPPED'}</td>
-                        <td>{row.itemUnit || 'N/A'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>
                         <td className="table-num">{formatQuantity(row.quantity)}</td>
                         <td className="table-num">{formatMoney(getReceiptLineTotal(row))}</td>
@@ -3105,13 +3002,50 @@ export default function Dashboard() {
                 </div>
               )}
               {filteredInventoryRows.length > 0 ? (
-                <div className="data-table-wrap table-responsive inventory-sheet-wrap">
-                  <SpreadsheetGrid
-                    className="inventory-sheet-grid"
-                    columns={inventoryGridColumns}
-                    rows={visibleInventoryRows}
-                    getRowKey={(row, index) => row.id || `${row.itemType}-${row.itemName}-${row.unit}-${index}`}
-                  />
+                <div className="data-table-wrap table-responsive">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Category</th>
+                        <th>Item Name</th>
+                        <th>Item Unit</th>
+                        <th>Description</th>
+                        <th>Brand</th>
+                        <th className="table-num">Price</th>
+                        <th>Measure</th>
+                        <th className="table-num">Current Qty</th>
+                        <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                      {visibleInventoryRows.map((row, index) => (
+                        <tr key={`${row.itemType}-${row.itemName}-${index}`}>
+                          <td>{row.itemType || 'N/A'}</td>
+                          <td>{row.itemName || 'N/A'}</td>
+                          <td>{row.unit || 'N/A'}</td>
+                          <td>{row.itemDesc || 'N/A'}</td>
+                          <td>{row.brand || 'N/A'}</td>
+                          <td className="table-num">{formatMoney(row.defaultPrice)}</td>
+                          <td>{row.measurement || 'N/A'}</td>
+                          <td className="table-num">{formatQuantity(row.currentInv)}</td>
+                          <td>
+                            <div
+                              className="inventory-status-cell"
+                              title={getInventoryStatusHelp(row)}
+                              aria-label={getInventoryStatusHelp(row)}
+                            >
+                              <div className="inventory-status-track">
+                                <div
+                                  className={`inventory-status-fill ${row.inventoryBadge}`}
+                                  style={{ width: `${row.inventoryPct}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="panel-empty-state">
@@ -3164,22 +3098,21 @@ export default function Dashboard() {
                   <input type="text" value={receiptDraft.inputtedBy} readOnly />
                 </label>
                 <label className="order-field">
-                  <span className="order-field-label">Input Date</span>
+                  <span className="order-field-label">Input Date &amp; Time</span>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={receiptDraft.inputDate}
                     onChange={(event) => updateReceiptField('inputDate', event.target.value)}
                     required
                   />
                 </label>
-
-                <label className="order-field">
-                  <span className="order-field-label">Input Time</span>
-                  <input
-                    type="time"
-                    value={receiptDraft.inputTime}
-                    onChange={(event) => updateReceiptField('inputTime', event.target.value)}
-                    required
+                <label className="order-field order-field-full">
+                  <span className="order-field-label">Notes</span>
+                  <textarea
+                    rows="3"
+                    value={receiptDraft.notes}
+                    onChange={(event) => updateReceiptField('notes', event.target.value)}
+                    placeholder="Optional purchasing notes."
                   />
                 </label>
               </div>
@@ -3219,7 +3152,7 @@ export default function Dashboard() {
                     borderRadius: '8px',
                     border: '1px solid #d0ddd0'
                   }}>
-                    <h4 style={{ margin: '0 0 0.75rem 0', color: '#1e4d2b', fontSize: 'var(--font-14)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <h4 style={{ margin: '0 0 0.75rem 0', color: '#1e4d2b', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Scanned Receipt Lines
                     </h4>
                     <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
@@ -3233,13 +3166,13 @@ export default function Dashboard() {
                             background: '#fff',
                             borderRadius: '4px',
                             border: '1px solid #e2ece2',
-                            fontSize: 'var(--font-14)'
+                            fontSize: '0.9rem'
                           }}>
                             <span style={{ color: '#2d6e3e', flex: 1, marginRight: '1rem' }}>{line}</span>
                             <button
                               type="button"
                               className="btn-outline btn-inline"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: 'var(--font-13)' }}
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
                               onClick={() => handleAddLineAsItem(line)}
                             >
                               + Add to Rows
@@ -3262,7 +3195,6 @@ export default function Dashboard() {
                     const brandOptions = getVariantFieldOptions(variants, 'brand', row);
                     const priceValue = Number(row.price);
                     const rowTotal = roundMoney((Number.isFinite(priceValue) ? priceValue : 0) * Number(row.quantity || 0));
-                    const itemNameSearchValue = manualItemSearchByRow[row.id] ?? row.itemName;
                     const availability = row.itemName && variants.length > 1 && matchingVariants.length !== 1
                       ? {
                         tone: 'unknown',
@@ -3273,23 +3205,6 @@ export default function Dashboard() {
                         isBlocked: false,
                       }
                       : getManualAvailabilityState(selectedVariant, row.quantity);
-                    const itemNameSearchOptions = itemOptions.map((itemName) => {
-                      const optionVariants = manualVariantsByItemKey.get(
-                        buildInventoryKey(row.itemType, itemName),
-                      ) || [];
-                      const optionAvailability = getManualItemAvailabilityState(
-                        optionVariants,
-                        row.quantity,
-                      );
-
-                      return {
-                        value: itemName,
-                        label: itemName,
-                        meta: optionAvailability.label,
-                        disabled: optionAvailability.isBlocked,
-                        searchText: `${itemName} ${optionAvailability.label}`,
-                      };
-                    });
 
                     return (
                       <div
@@ -3324,18 +3239,35 @@ export default function Dashboard() {
                           </label>
 
                           <label className="manual-item-field manual-item-field-wide">
-                            <span className="manual-item-label">Item Search</span>
-                            <TypeaheadSelect
-                              className={`manual-item-typeahead ${availability.selectTone}`}
+                            <span className="manual-item-label">Item Name</span>
+                            <select
+                              className={availability.selectTone}
                               title={availability.help}
-                              query={itemNameSearchValue}
-                              onQueryChange={(nextQuery) => handleManualItemSearchChange(row.id, nextQuery)}
-                              onSelect={(itemName) => handleManualItemNameChange(row.id, itemName)}
-                              options={itemNameSearchOptions}
-                              placeholder={row.itemType ? 'Search an item name' : 'Select type first'}
+                              value={row.itemName}
+                              onChange={(event) => handleManualItemNameChange(row.id, event.target.value)}
+                              required
                               disabled={!row.itemType}
-                              emptyMessage={row.itemType ? 'No items match that search.' : 'Select an item type first.'}
-                            />
+                            >
+                              <option value="">Select item</option>
+                              {itemOptions.map((itemName) => {
+                                const optionVariants = manualVariantsByItemKey.get(
+                                  buildInventoryKey(row.itemType, itemName),
+                                ) || [];
+                                const optionAvailability = getManualItemAvailabilityState(
+                                  optionVariants,
+                                  row.quantity,
+                                );
+                                return (
+                                  <option
+                                    key={`${row.id}-${itemName}`}
+                                    value={itemName}
+                                    disabled={optionAvailability.isBlocked}
+                                  >
+                                    {`${itemName} • ${optionAvailability.label}`}
+                                  </option>
+                                );
+                              })}
+                            </select>
                           </label>
 
                           <label className="manual-item-field">

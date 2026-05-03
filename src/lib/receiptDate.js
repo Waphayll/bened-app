@@ -45,24 +45,6 @@ export function getCurrentManilaDateTimeValue(date = new Date()) {
   ].join('-') + `T${padDateTimePart(parts.hour)}:${padDateTimePart(parts.minute)}`;
 }
 
-export function splitReceiptDateTimeInputValue(value) {
-  const inputValue = toReceiptDateTimeInputValue(value);
-  const [datePart = '', timePart = '00:00'] = inputValue.split('T');
-
-  return {
-    date: datePart,
-    time: timePart.slice(0, 5) || '00:00',
-  };
-}
-
-export function combineReceiptDateAndTime(dateValue, timeValue) {
-  const safeDate = String(dateValue || '').trim();
-  if (!safeDate) return '';
-
-  const safeTime = String(timeValue || '').trim() || '00:00';
-  return `${safeDate}T${safeTime.slice(0, 5)}`;
-}
-
 export function parseReceiptDateValue(value) {
   if (!value) return null;
 
