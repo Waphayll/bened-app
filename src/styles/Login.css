@@ -32,10 +32,14 @@
 .topbar-brand {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--font-14);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--green-deep);
+}
+
+.login-text-size-toggle {
+  margin-left: auto;
 }
 
 /* ── Left column ── */
@@ -51,7 +55,7 @@
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   letter-spacing: 0.25em;
   text-transform: uppercase;
   color: var(--mid);
@@ -119,7 +123,7 @@
 .logo-text {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
-  font-size: 18px;
+  font-size: var(--font-18);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--green-deep);
@@ -127,7 +131,7 @@
 
 .logo-sub {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--mid);
@@ -137,7 +141,7 @@
 .card-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 500;
-  font-size: 30px;
+  font-size: var(--font-30);
   color: var(--green-deep);
   letter-spacing: 0.01em;
   line-height: 1.15;
@@ -146,7 +150,7 @@
 
 .card-subtitle {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   letter-spacing: 0.03em;
   color: var(--mid);
 }
@@ -159,7 +163,7 @@
 .form-label {
   display: block;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9.5px;
+  font-size: var(--font-9-5);
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -188,7 +192,7 @@
   border-bottom-color: var(--border-mid);
   color: var(--green-ink);
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   padding: 12px 14px 12px 40px;
   outline: none;
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
@@ -218,7 +222,7 @@
   gap: 9px;
   cursor: pointer;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
@@ -245,7 +249,7 @@
 
 .forgot-link {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
   text-decoration: none;
   border-bottom: 1px solid transparent;
@@ -260,7 +264,7 @@
   border: 1px solid rgba(163,48,48,0.2);
   color: var(--red);
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   padding: 10px 14px;
   margin-bottom: 20px;
   letter-spacing: 0.02em;
@@ -271,7 +275,7 @@
   border: 1px solid rgba(45,110,62,0.14);
   color: var(--green-deep);
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   padding: 10px 14px;
   margin-bottom: 20px;
   letter-spacing: 0.02em;
@@ -279,7 +283,7 @@
 
 .access-note code {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 11px;
+  font-size: var(--font-11);
   color: var(--green);
 }
 
@@ -291,7 +295,7 @@
   color: var(--white);
   border: none;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 11px;
+  font-size: var(--font-11);
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -329,7 +333,7 @@
 
 .bottombar-left {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.18em;
   color: var(--mid);
   text-transform: uppercase;
@@ -343,7 +347,7 @@
 
 .bottombar-center a {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.15em;
   color: var(--mid);
   text-transform: uppercase;

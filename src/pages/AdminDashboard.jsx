@@ -1,12 +1,15 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SpreadsheetGrid from '../components/SpreadsheetGrid';
+import TextSizeToggle from '../components/TextSizeToggle';
 import { useAuth } from '../lib/AuthContext';
 import { useAppData } from '../lib/AppDataContext';
 import {
+  combineReceiptDateAndTime,
   formatReceiptDateValue,
   getCurrentManilaDateTimeValue,
   parseReceiptDateValue,
-  toReceiptDateTimeInputValue,
+  splitReceiptDateTimeInputValue,
 } from '../lib/receiptDate';
 import {
   applyReceiptRowsToInventory,
@@ -55,12 +58,15 @@ function formatDateValue(value) {
 }
 
 function createReceiptForm(inputBy = 'Admin') {
+  const currentDateTime = splitReceiptDateTimeInputValue(getCurrentManilaDateTimeValue());
+
   return {
     inputBy,
-    inputDate: getCurrentManilaDateTimeValue(),
-    note: '',
+    inputDate: currentDateTime.date,
+    inputTime: currentDateTime.time,
     itemType: '',
     itemName: '',
+    itemUnit: '',
     price: '',
     quantity: '',
   };
@@ -80,12 +86,15 @@ function createMasterlistForm() {
 }
 
 function mapReceiptToForm(record, fallbackInputBy = 'Admin') {
+  const receiptDateTime = splitReceiptDateTimeInputValue(record?.inputDate);
+
   return {
     inputBy: String(record?.inputBy || fallbackInputBy),
-    inputDate: toReceiptDateTimeInputValue(record?.inputDate),
-    note: String(record?.note || ''),
+    inputDate: receiptDateTime.date,
+    inputTime: receiptDateTime.time,
     itemType: String(record?.itemType || ''),
     itemName: String(record?.itemName || ''),
+    itemUnit: String(record?.itemUnit || ''),
     price: Number.isFinite(Number(record?.price)) ? String(record.price) : '',
     quantity: Number.isFinite(Number(record?.quantity)) ? String(record.quantity) : '',
   };
@@ -205,9 +214,10 @@ export default function AdminDashboard() {
       const haystack = [
         row.inputBy,
         row.inputDate,
-        row.note,
         row.itemType,
         row.itemName,
+        row.itemUnit,
+        row.note,
       ]
         .filter(Boolean)
         .map((value) => normalizeLookup(value))
@@ -324,8 +334,10 @@ export default function AdminDashboard() {
   function validateReceiptForm() {
     if (!receiptForm.inputBy.trim()) return 'Input by is required.';
     if (!receiptForm.inputDate) return 'Input date is required.';
+    if (!receiptForm.inputTime) return 'Input time is required.';
     if (!receiptForm.itemType.trim()) return 'Item type is required.';
     if (!receiptForm.itemName.trim()) return 'Item name is required.';
+    if (!receiptForm.itemUnit.trim()) return 'Unit of measurement is required.';
 
     const price = Number(receiptForm.price);
     const quantity = Number(receiptForm.quantity);
@@ -339,10 +351,10 @@ export default function AdminDashboard() {
   function buildReceiptPayload() {
     return {
       INPUT_BY: receiptForm.inputBy.trim(),
-      INPUT_DATE: receiptForm.inputDate,
-      NOTE: receiptForm.note.trim(),
+      INPUT_DATE: combineReceiptDateAndTime(receiptForm.inputDate, receiptForm.inputTime),
       ITEM_TYPE: receiptForm.itemType.trim(),
       ITEM_NAME: receiptForm.itemName.trim(),
+      ITEM_UNIT: receiptForm.itemUnit.trim(),
       PRICE: roundMoney(Number(receiptForm.price)),
       QUANTITY: Number(receiptForm.quantity),
       TOTAL_PRICE: receiptFormTotal,
@@ -548,6 +560,68 @@ export default function AdminDashboard() {
     }
   }
 
+  const masterlistGridColumns = [
+    {
+      key: 'rowNumber',
+      label: '#',
+      width: '72px',
+      align: 'end',
+      render: (_row, index) => String(index + 1).padStart(3, '0'),
+    },
+    { key: 'itemType', label: 'Type', width: 'minmax(140px, 1.1fr)' },
+    { key: 'itemName', label: 'Item Name', width: 'minmax(220px, 1.5fr)' },
+    { key: 'unit', label: 'Unit', width: 'minmax(120px, 0.8fr)' },
+    { key: 'itemDesc', label: 'Description', width: 'minmax(220px, 1.4fr)' },
+    { key: 'brand', label: 'Brand', width: 'minmax(160px, 1fr)' },
+    {
+      key: 'defaultPrice',
+      label: 'Price',
+      width: 'minmax(130px, 0.9fr)',
+      align: 'end',
+      render: (row) => formatMoney(row.defaultPrice),
+    },
+    { key: 'measurement', label: 'Measurement', width: 'minmax(150px, 1fr)' },
+    {
+      key: 'salesTargetPct',
+      label: 'Sales Target %',
+      width: 'minmax(150px, 0.9fr)',
+      align: 'end',
+      render: (row) => formatNumber(row.salesTargetPct),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: '190px',
+      sticky: 'right',
+      render: (row) => {
+        const canManageRow = canManageAppwriteRecord(row);
+
+        return (
+          <div className="admin-table-actions">
+            <button
+              type="button"
+              className="admin-action-btn"
+              disabled={!canManageRow}
+              title={canManageRow ? 'Load this masterlist row into the editor.' : 'This row is read-only because no Appwrite record ID was returned.'}
+              onClick={() => handleMasterlistEdit(row)}
+            >
+              Edit Row
+            </button>
+            <button
+              type="button"
+              className="admin-action-btn danger"
+              disabled={!canManageRow}
+              title={canManageRow ? 'Delete this masterlist row from Appwrite.' : 'This row is read-only because no Appwrite record ID was returned.'}
+              onClick={() => handleMasterlistDelete(row)}
+            >
+              Delete Row
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <>
       <header className="topnav">
@@ -565,6 +639,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="topnav-right admin-topbar-actions">
+          <TextSizeToggle className="topbar-text-size-toggle" />
           <button type="button" className="btn-outline" onClick={() => navigate('/dashboard')}>
             Open Dashboard
           </button>
@@ -632,13 +707,25 @@ export default function AdminDashboard() {
                 </label>
 
                 <label className="admin-field">
-                  <span className="admin-field-label">Input Date &amp; Time</span>
+                  <span className="admin-field-label">Input Date</span>
                   <input
-                    type="datetime-local"
+                    type="date"
                     value={receiptForm.inputDate}
                     onChange={(event) => setReceiptForm((current) => ({
                       ...current,
                       inputDate: event.target.value,
+                    }))}
+                  />
+                </label>
+
+                <label className="admin-field">
+                  <span className="admin-field-label">Input Time</span>
+                  <input
+                    type="time"
+                    value={receiptForm.inputTime}
+                    onChange={(event) => setReceiptForm((current) => ({
+                      ...current,
+                      inputTime: event.target.value,
                     }))}
                   />
                 </label>
@@ -656,16 +743,16 @@ export default function AdminDashboard() {
                   />
                 </label>
 
-                <label className="admin-field admin-field-wide">
-                  <span className="admin-field-label">Note</span>
+                <label className="admin-field">
+                  <span className="admin-field-label">Unit of Measurement</span>
                   <input
                     type="text"
-                    value={receiptForm.note}
+                    value={receiptForm.itemUnit}
                     onChange={(event) => setReceiptForm((current) => ({
                       ...current,
-                      note: event.target.value,
+                      itemUnit: event.target.value,
                     }))}
-                    placeholder="Optional receipt note"
+                    placeholder="PCS, BAG, BOX..."
                   />
                 </label>
 
@@ -745,7 +832,7 @@ export default function AdminDashboard() {
                   type="search"
                   value={receiptSearch}
                   onChange={(event) => setReceiptSearch(event.target.value)}
-                  placeholder="Search by date, encoder, item, or category"
+                  placeholder="Search by date, encoder, item, unit, or category"
                 />
               </label>
               <span className="admin-result-count">
@@ -760,9 +847,9 @@ export default function AdminDashboard() {
                     <tr>
                       <th>Input By</th>
                       <th>Date &amp; Time</th>
-                      <th>Note</th>
                       <th>Category</th>
                       <th>Item Name</th>
+                      <th>Unit</th>
                       <th className="table-num">Price</th>
                       <th className="table-num">Qty</th>
                       <th className="table-num">Total</th>
@@ -774,9 +861,9 @@ export default function AdminDashboard() {
                       <tr key={row.id || `${row.inputDate}-${row.itemName}-${index}`}>
                         <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
-                        <td>{row.note || 'N/A'}</td>
                         <td>{row.itemType || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
+                        <td>{row.itemUnit || 'N/A'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>
                         <td className="table-num">{formatNumber(row.quantity)}</td>
                         <td className="table-num">{formatMoney(row.totalPrice)}</td>
@@ -1003,66 +1090,18 @@ export default function AdminDashboard() {
             )}
 
             {filteredMasterlistRows.length > 0 ? (
-              <div className="data-table-wrap table-responsive admin-table-scroll admin-table-scroll-masterlist">
-                <table className="data-table admin-table">
-                  <thead>
-                    <tr>
-                      <th>Type</th>
-                      <th>Item Name</th>
-                      <th>Unit</th>
-                      <th>Description</th>
-                      <th>Brand</th>
-                      <th className="table-num">Price</th>
-                      <th>Measurement</th>
-                      <th className="table-num">Sales Target %</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMasterlistRows.map((row, index) => {
-                      const canManageRow = canManageAppwriteRecord(row);
-                      const isEditingRow = editingMasterlist?.id && row.id && editingMasterlist.id === row.id;
-
-                      return (
-                        <tr
-                          key={row.id || `${row.itemType}-${row.itemName}-${index}`}
-                          className={isEditingRow ? 'admin-row-active' : ''}
-                        >
-                          <td>{row.itemType || 'N/A'}</td>
-                          <td>{row.itemName || 'N/A'}</td>
-                          <td>{row.unit || 'N/A'}</td>
-                          <td>{row.itemDesc || 'N/A'}</td>
-                          <td>{row.brand || 'N/A'}</td>
-                          <td className="table-num">{formatMoney(row.defaultPrice)}</td>
-                          <td>{row.measurement || 'N/A'}</td>
-                          <td className="table-num">{formatNumber(row.salesTargetPct)}</td>
-                          <td>
-                            <div className="admin-table-actions">
-                              <button
-                                type="button"
-                                className="admin-action-btn"
-                                disabled={!canManageRow}
-                                title={canManageRow ? 'Load this masterlist row into the editor.' : 'This row is read-only because no Appwrite record ID was returned.'}
-                                onClick={() => handleMasterlistEdit(row)}
-                              >
-                                Edit Row
-                              </button>
-                              <button
-                                type="button"
-                                className="admin-action-btn danger"
-                                disabled={!canManageRow}
-                                title={canManageRow ? 'Delete this masterlist row from Appwrite.' : 'This row is read-only because no Appwrite record ID was returned.'}
-                                onClick={() => handleMasterlistDelete(row)}
-                              >
-                                Delete Row
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="data-table-wrap table-responsive admin-table-scroll admin-table-scroll-masterlist admin-sheet-wrap">
+                <SpreadsheetGrid
+                  className="admin-masterlist-grid"
+                  columns={masterlistGridColumns}
+                  rows={filteredMasterlistRows}
+                  getRowKey={(row, index) => row.id || `${row.itemType}-${row.itemName}-${index}`}
+                  rowClassName={(row) => (
+                    editingMasterlist?.id && row.id && editingMasterlist.id === row.id
+                      ? 'admin-row-active'
+                      : ''
+                  )}
+                />
               </div>
             ) : (
               <div className="panel-empty-state">

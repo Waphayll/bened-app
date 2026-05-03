@@ -17,6 +17,10 @@
   gap: 10px;
 }
 
+.admin-topbar-actions .topbar-text-size-toggle {
+  margin-right: 4px;
+}
+
 .admin-role-pill {
   display: inline-flex;
   align-items: center;
@@ -24,7 +28,7 @@
   border: 1px solid var(--pale);
   background: linear-gradient(135deg, rgba(45,110,62,0.08), rgba(255,255,255,0.95));
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -51,7 +55,7 @@
 
 .admin-stat-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -60,7 +64,7 @@
 
 .admin-stat-value {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 28px;
+  font-size: var(--font-28);
   font-weight: 600;
   color: var(--green-deep);
   line-height: 1;
@@ -68,7 +72,7 @@
 
 .admin-stat-detail {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--mid);
   line-height: 1.35;
 }
@@ -114,7 +118,7 @@
 .admin-field-label,
 .admin-search-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -130,7 +134,7 @@
   background: var(--off-white);
   color: var(--green-ink);
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
@@ -160,7 +164,7 @@
   padding: 12px 14px;
   border: 1px solid transparent;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
 }
 
 .admin-feedback.success {
@@ -197,7 +201,7 @@
   background: var(--off-white);
   color: var(--green-ink);
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
@@ -216,7 +220,7 @@
 .admin-result-count {
   flex-shrink: 0;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--mid);
 }
 
@@ -225,7 +229,7 @@
   border: 1px solid rgba(45,110,62,0.18);
   background: rgba(45,110,62,0.06);
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
 }
 
@@ -239,7 +243,7 @@
   background: var(--white);
   color: var(--green-deep);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -282,6 +286,23 @@
 
 .admin-row-active td {
   background: rgba(45,110,62,0.08);
+}
+
+.admin-row-active .spreadsheet-grid-cell {
+  background: rgba(45,110,62,0.08);
+}
+
+.admin-row-active .spreadsheet-grid-cell.is-sticky-right {
+  background: rgba(232,245,236,0.98);
+}
+
+.admin-sheet-wrap {
+  border: 1px solid var(--mist);
+  background: var(--white);
+}
+
+.admin-masterlist-grid {
+  min-width: 1500px;
 }
 
 .admin-table th:last-child,

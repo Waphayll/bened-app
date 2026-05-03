@@ -21,6 +21,10 @@
   gap: 20px;
 }
 
+.topbar-text-size-toggle {
+  margin-right: -8px;
+}
+
 .logo-mark-nav {
   width: 32px; height: 32px;
   background: var(--green-dark);
@@ -35,14 +39,14 @@
 .brand-name {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--font-15);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--green-deep);
 }
 .brand-sub {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8px;
+  font-size: var(--font-8);
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--mid);
@@ -57,7 +61,7 @@
 .nav-links { display: flex; gap: 4px; }
 .nav-link {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -80,7 +84,7 @@
 
 .nav-date {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
@@ -100,13 +104,13 @@
   background: var(--green);
   color: var(--white);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
 .user-name {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--green-deep);
 }
 
@@ -128,7 +132,7 @@
   width: 100%;
   padding: 11px 16px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
   text-align: left;
   background: none;
@@ -143,7 +147,7 @@
 .dropdown-meta {
   padding: 10px 16px 6px;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--mid);
@@ -168,7 +172,7 @@
   display: block;
   margin-bottom: 8px;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -178,12 +182,12 @@
 .page-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 500;
-  font-size: 26px;
+  font-size: var(--font-26);
   color: var(--green-deep);
 }
 .page-sub {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--mid);
   margin-top: 3px;
 }
@@ -191,7 +195,7 @@
 .order-feedback {
   margin-top: 8px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--green-mid);
 }
 
@@ -203,7 +207,7 @@
 
 .btn-outline {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -218,7 +222,7 @@
 
 .btn-solid {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -299,7 +303,7 @@
   background: rgba(45, 110, 62, 0.06);
   padding: 4px 8px;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8px;
+  font-size: var(--font-8);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -309,7 +313,7 @@
 
 .kpi-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -320,7 +324,7 @@
 .kpi-value {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 500;
-  font-size: 26px;
+  font-size: var(--font-26);
   color: var(--green-deep);
   line-height: 1;
   margin-bottom: 8px;
@@ -328,7 +332,7 @@
 
 .kpi-delta {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 12.5px;
+  font-size: var(--font-12-5);
 }
 .kpi-delta.positive { color: var(--green-mid); }
 .kpi-delta.muted { color: var(--amber); }
@@ -340,7 +344,7 @@
 .kpi-note {
   margin-top: 8px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 12px;
+  font-size: var(--font-12);
   color: var(--mid);
 }
 
@@ -365,12 +369,12 @@
 .panel-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 500;
-  font-size: 16px;
+  font-size: var(--font-16);
   color: var(--green-deep);
 }
 .panel-sub {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 12.5px;
+  font-size: var(--font-12-5);
   color: var(--mid);
   margin-top: 2px;
 }
@@ -389,7 +393,7 @@
 
 .table-filter-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -401,7 +405,7 @@
   border-color: var(--pale);
   color: var(--green-deep);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -418,7 +422,7 @@
   padding: 10px 12px;
   color: var(--green-deep);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -431,7 +435,7 @@
 
 .tab {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -513,12 +517,12 @@
 .inv-info { display: flex; flex-direction: column; gap: 2px; }
 .inv-name {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
 }
 .inv-qty {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.12em;
   color: var(--mid);
   text-transform: uppercase;
@@ -529,7 +533,7 @@
 
 .inv-badge {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -586,7 +590,7 @@
 
 .sales-distribution-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--mid);
@@ -594,14 +598,14 @@
 
 .sales-distribution-total strong {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 24px;
+  font-size: var(--font-24);
   font-weight: 500;
   color: var(--green-deep);
 }
 
 .sales-distribution-total span:last-child {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
@@ -641,7 +645,7 @@
 
 .sales-distribution-name {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
 }
 
@@ -655,20 +659,20 @@
 
 .sales-distribution-item-values span:first-child {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   font-weight: 700;
   color: var(--green);
 }
 
 .sales-distribution-item-values span:last-child {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
 .panel-list-message {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--mid);
 }
 
@@ -677,7 +681,7 @@
 ═══════════════════════════════════ */
 .summary-count {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8px;
+  font-size: var(--font-8);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -695,7 +699,7 @@
   border-color: var(--pale);
   color: var(--green);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8px;
+  font-size: var(--font-8);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -770,7 +774,7 @@
 
 .summary-title {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 10px;
+  font-size: var(--font-10);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--green-deep);
@@ -779,7 +783,7 @@
 .summary-tone {
   padding: 3px 6px;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 7px;
+  font-size: var(--font-7);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -806,19 +810,19 @@
 }
 
 .summary-text {
-  font-size: 15px;
+  font-size: var(--font-15);
   color: var(--green-deep);
 }
 
 .summary-detail {
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
 .summary-action {
   align-self: center;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8px;
+  font-size: var(--font-8);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -833,7 +837,7 @@
   padding: 24px;
   text-align: center;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   color: var(--mid);
 }
 
@@ -846,7 +850,7 @@
 .table-panel-note {
   padding: 14px 24px 0;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--amber);
 }
 
@@ -881,7 +885,7 @@
 
 .inventory-filter-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -895,7 +899,7 @@
   background: var(--white);
   padding: 10px 12px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   color: var(--green-ink);
 }
 
@@ -909,7 +913,7 @@
 .inventory-filter-summary {
   padding-top: 2px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
 }
 
@@ -927,7 +931,7 @@
 .inventory-table-summary,
 .inventory-page-status {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
@@ -975,6 +979,30 @@
   background: var(--red);
 }
 
+.inventory-sheet-wrap {
+  border: 1px solid var(--mist);
+  background: var(--white);
+}
+
+.inventory-sheet-grid {
+  min-width: 1320px;
+}
+
+.inventory-sheet-status {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.inventory-sheet-status-label {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: var(--font-8-5);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+
 .data-table-wrap {
   overflow: auto;
 }
@@ -991,7 +1019,7 @@
   border-bottom: 1px solid var(--mist);
   text-align: left;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
   vertical-align: top;
 }
@@ -1002,7 +1030,7 @@
   z-index: 1;
   background: #f8fbf8;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--mid);
@@ -1052,7 +1080,7 @@
 
 .order-modal-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 25px;
+  font-size: var(--font-25);
   font-weight: 500;
   color: var(--green-deep);
 }
@@ -1060,7 +1088,7 @@
 .order-modal-subtitle {
   margin-top: 4px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--mid);
 }
 
@@ -1076,7 +1104,7 @@
   background: var(--white);
   color: var(--green);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1100,7 +1128,7 @@
   background: var(--white);
   color: var(--green);
   cursor: pointer;
-  font-size: 20px;
+  font-size: var(--font-20);
   line-height: 1;
   transition: border-color 0.2s, color 0.2s;
 }
@@ -1135,7 +1163,7 @@
 
 .order-field-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1148,13 +1176,14 @@
 .order-item-row input,
 .order-item-row select,
 .manual-item-field input,
-.manual-item-field select {
+.manual-item-field select,
+.typeahead-input {
   width: 100%;
   border: 1px solid var(--pale);
   background: var(--white);
   padding: 10px 12px;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   color: var(--green-ink);
 }
 
@@ -1169,7 +1198,8 @@
 .order-item-row input:focus,
 .order-item-row select:focus,
 .manual-item-field input:focus,
-.manual-item-field select:focus {
+.manual-item-field select:focus,
+.typeahead-input:focus {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 2px rgba(45, 110, 62, 0.14);
@@ -1196,7 +1226,7 @@
 
 .order-section-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 17px;
+  font-size: var(--font-17);
   font-weight: 500;
   color: var(--green-deep);
 }
@@ -1233,7 +1263,7 @@
 
 .manual-item-card-title {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1259,7 +1289,7 @@
 
 .manual-item-label {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8px;
+  font-size: var(--font-8);
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -1281,14 +1311,14 @@
 .manual-stock-panel strong,
 .manual-total-panel strong {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 18px;
+  font-size: var(--font-18);
   font-weight: 500;
 }
 
 .manual-stock-panel span:last-child,
 .manual-total-panel span:last-child {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: inherit;
 }
 
@@ -1328,7 +1358,7 @@
   background: var(--red-bg);
   color: var(--red);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1358,15 +1388,32 @@
   color: var(--mid);
 }
 
+.manual-item-typeahead.inventory-tone-ok .typeahead-input {
+  color: var(--green-deep);
+}
+
+.manual-item-typeahead.inventory-tone-warn .typeahead-input {
+  color: #8a5f17;
+}
+
+.manual-item-typeahead.inventory-tone-blocked .typeahead-input {
+  color: #7f8b84;
+  background: #f1f3f1;
+}
+
+.manual-item-typeahead.inventory-tone-unknown .typeahead-input {
+  color: var(--mid);
+}
+
 .masterlist-note {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
 .masterlist-warning {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--amber);
   margin-top: 4px;
 }
@@ -1394,13 +1441,13 @@
 
 .dropzone-title {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 16px;
+  font-size: var(--font-16);
   color: var(--green-deep);
 }
 
 .dropzone-hint {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--mid);
@@ -1408,7 +1455,7 @@
 
 .dropzone-meta {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
 }
 
@@ -1437,13 +1484,13 @@
 
 .receipt-name {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   color: var(--green-deep);
 }
 
 .receipt-size {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--mid);
@@ -1454,7 +1501,7 @@
   background: transparent;
   color: var(--green);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1470,21 +1517,21 @@
   grid-column: 1 / -1;
   font-family: 'EB Garamond', Georgia, serif;
   color: var(--green-mid);
-  font-size: 14px;
+  font-size: var(--font-14);
 }
 
 .receipt-error-text {
   grid-column: 1 / -1;
   font-family: 'EB Garamond', Georgia, serif;
   color: var(--red);
-  font-size: 14px;
+  font-size: var(--font-14);
 }
 
 .receipt-empty-text {
   grid-column: 1 / -1;
   font-family: 'EB Garamond', Georgia, serif;
   color: var(--mid);
-  font-size: 14px;
+  font-size: var(--font-14);
 }
 
 .receipt-table-wrap {
@@ -1504,13 +1551,13 @@
   padding: 8px 10px;
   text-align: left;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
 }
 
 .receipt-table th {
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 8.5px;
+  font-size: var(--font-8-5);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--mid);
@@ -1533,12 +1580,12 @@
 .td-unit { width: 60px; white-space: nowrap; }
 .td-price { white-space: nowrap; text-align: right; }
 
-.ocr-unit { font-family: 'Libre Baskerville', Georgia, serif; font-size: 12px; }
+.ocr-unit { font-family: 'Libre Baskerville', Georgia, serif; font-size: var(--font-12); }
 
 .unit-badge-warn {
   margin-left: 4px;
   color: #b06000;
-  font-size: 11px;
+  font-size: var(--font-11);
   cursor: default;
 }
 
@@ -1550,7 +1597,7 @@
 
 .ocr-raw-label {
   display: inline-block;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: #fff;
@@ -1564,7 +1611,7 @@
 
 .ocr-scanned-text {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--green-deep);
   word-break: break-word;
 }
@@ -1573,7 +1620,7 @@
   display: block;
   margin-top: 3px;
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--font-11);
   color: var(--mid);
   white-space: pre-wrap;
   word-break: break-all;
@@ -1615,7 +1662,7 @@
 /* Diff spans */
 .candidate-diff {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   word-break: break-word;
   line-height: 1.5;
 }
@@ -1649,7 +1696,7 @@
 }
 
 .cand-score {
-  font-size: 10px;
+  font-size: var(--font-10);
   font-family: 'Libre Baskerville', Georgia, serif;
   font-weight: 700;
   color: #fff;
@@ -1661,7 +1708,7 @@
 .candidate-alt .cand-score { background: var(--mid); }
 
 .cand-lev {
-  font-size: 10px;
+  font-size: var(--font-10);
   color: var(--mid);
   background: #f0f0f0;
   border-radius: 3px;
@@ -1669,7 +1716,7 @@
 }
 
 .cand-unit-ok {
-  font-size: 10px;
+  font-size: var(--font-10);
   color: #1a7a1a;
   background: #e6f9e6;
   border: 1px solid #b2d8b2;
@@ -1678,7 +1725,7 @@
 }
 
 .cand-unit-warn {
-  font-size: 10px;
+  font-size: var(--font-10);
   color: #b06000;
   background: #fff3cc;
   border: 1px solid #f0d080;
@@ -1688,7 +1735,7 @@
 
 .candidate-none {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--mid);
   font-style: italic;
 }
@@ -1697,7 +1744,7 @@
 .receipt-total-amount {
   grid-column: 1 / -1;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 15px;
+  font-size: var(--font-15);
   color: var(--green-deep);
 }
 
@@ -1711,7 +1758,7 @@
 .receipt-raw-details summary {
   cursor: pointer;
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--green);
@@ -1721,13 +1768,13 @@
   margin-top: 8px;
   white-space: pre-wrap;
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 13px;
+  font-size: var(--font-13);
   color: var(--green-ink);
 }
 
 .order-form-error {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: 14px;
+  font-size: var(--font-14);
   color: var(--red);
 }
 
@@ -1749,7 +1796,7 @@
   border-top: 1px solid var(--mist);
   background: var(--white);
   font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 9px;
+  font-size: var(--font-9);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--mid);

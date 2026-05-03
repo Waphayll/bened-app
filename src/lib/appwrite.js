@@ -373,6 +373,7 @@ function buildReceiptPayload(record) {
     NOTE: sanitizeText(record?.NOTE ?? record?.note ?? record?.notes),
     ITEM_NAME: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
     ITEM_TYPE: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
+    ITEM_UNIT: sanitizeText(record?.ITEM_UNIT ?? record?.itemUnit ?? record?.unit),
     PRICE: sanitizeRequiredNumber(record?.PRICE ?? record?.price),
     QUANTITY: sanitizeRequiredNumber(record?.QUANTITY ?? record?.quantity),
     TOTAL_PRICE: sanitizeRequiredNumber(record?.TOTAL_PRICE ?? record?.totalPrice),
