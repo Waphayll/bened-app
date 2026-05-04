@@ -75,7 +75,6 @@ function createMasterlistForm() {
     brand: '',
     defaultPrice: '',
     measurement: '',
-    salesTargetPct: '',
   };
 }
 
@@ -100,7 +99,6 @@ function mapMasterlistToForm(record) {
     brand: String(record?.brand || ''),
     defaultPrice: Number.isFinite(Number(record?.defaultPrice)) ? String(record.defaultPrice) : '',
     measurement: String(record?.measurement || ''),
-    salesTargetPct: Number.isFinite(Number(record?.salesTargetPct)) ? String(record.salesTargetPct) : '',
   };
 }
 
@@ -455,26 +453,18 @@ export default function AdminDashboard() {
       return 'Default price must be a valid non-negative number.';
     }
 
-    if (
-      masterlistForm.salesTargetPct !== ''
-      && !Number.isFinite(Number(masterlistForm.salesTargetPct))
-    ) {
-      return 'Sales target percent must be a valid number.';
-    }
-
     return '';
   }
 
   function buildMasterlistPayload() {
     return {
-      ITEM_TYPE: masterlistForm.itemType.trim(),
-      ITEM_NAME: masterlistForm.itemName.trim(),
-      ITEM_UNIT: masterlistForm.unit.trim(),
-      ITEM_DESC: masterlistForm.itemDesc.trim(),
-      BRAND: masterlistForm.brand.trim(),
-      DEFAULT_PRICE: masterlistForm.defaultPrice === '' ? null : roundMoney(Number(masterlistForm.defaultPrice)),
-      MEASUREMENT: masterlistForm.measurement.trim(),
-      SALES_TARGET_PCT: masterlistForm.salesTargetPct === '' ? null : Number(masterlistForm.salesTargetPct),
+      itemType: masterlistForm.itemType.trim(),
+      itemName: masterlistForm.itemName.trim(),
+      unit: masterlistForm.unit.trim(),
+      itemDesc: masterlistForm.itemDesc.trim(),
+      brand: masterlistForm.brand.trim(),
+      defaultPrice: masterlistForm.defaultPrice === '' ? null : roundMoney(Number(masterlistForm.defaultPrice)),
+      measurement: masterlistForm.measurement.trim(),
     };
   }
 
@@ -494,12 +484,20 @@ export default function AdminDashboard() {
 
     try {
       const payload = buildMasterlistPayload();
+      const schemaHints = editingMasterlist?.fieldKeys
+        || masterlistRows.find((row) => row?.fieldKeys)?.fieldKeys
+        || null;
 
       if (editingMasterlist?.id) {
-        await updateMasterlistRecord(editingMasterlist.id, editingMasterlist.source, payload);
+        await updateMasterlistRecord(
+          editingMasterlist.id,
+          editingMasterlist.source,
+          payload,
+          schemaHints,
+        );
         setMasterlistNotice('Masterlist row updated.');
       } else {
-        await createMasterlistRecord(payload);
+        await createMasterlistRecord(payload, schemaHints);
         setMasterlistNotice('Masterlist row created.');
       }
 
@@ -911,19 +909,6 @@ export default function AdminDashboard() {
                   />
                 </label>
 
-                <label className="admin-field">
-                  <span className="admin-field-label">Sales Target %</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={masterlistForm.salesTargetPct}
-                    onChange={(event) => setMasterlistForm((current) => ({
-                      ...current,
-                      salesTargetPct: event.target.value,
-                    }))}
-                    placeholder="Optional"
-                  />
-                </label>
               </div>
 
               {(masterlistNotice || masterlistError) && (
@@ -1014,7 +999,6 @@ export default function AdminDashboard() {
                       <th>Brand</th>
                       <th className="table-num">Price</th>
                       <th>Measurement</th>
-                      <th className="table-num">Sales Target %</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -1035,7 +1019,6 @@ export default function AdminDashboard() {
                           <td>{row.brand || 'N/A'}</td>
                           <td className="table-num">{formatMoney(row.defaultPrice)}</td>
                           <td>{row.measurement || 'N/A'}</td>
-                          <td className="table-num">{formatNumber(row.salesTargetPct)}</td>
                           <td>
                             <div className="admin-table-actions">
                               <button

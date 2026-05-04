@@ -115,8 +115,165 @@ function resolveField(record, candidates) {
   return null;
 }
 
+function hasOwnField(record, key) {
+  return Boolean(record) && Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function resolvePresentFieldKey(record, candidates) {
+  for (const key of candidates) {
+    if (hasOwnField(record, key)) {
+      return key;
+    }
+  }
+  return null;
+}
+
 function resolveRecordId(record) {
   return resolveField(record, ['$id', 'id', 'rowId', '$rowId', '_id']);
+}
+
+const MASTERLIST_FIELD_KEY_CANDIDATES = {
+  itemType: ['ITEM_TYPE', 'item_type', 'itemType', 'CATEGORY', 'category', 'TYPE', 'type'],
+  itemName: ['ITEM_NAME', 'item_name', 'itemName', 'NAME', 'name', 'PRODUCT_NAME', 'product_name'],
+  unit: ['ITEM_UNIT', 'item_unit', 'unit', 'UNIT', 'UNIT_OF_MEASUREMENT', 'unit_of_measurement', 'UOM', 'uom'],
+  itemDesc: ['ITEM_DESC', 'item_desc', 'itemDesc', 'DESCRIPTION', 'description', 'DESC', 'desc'],
+  brand: ['BRAND', 'brand'],
+  defaultPrice: ['DEFAULT_PRICE', 'default_price', 'defaultPrice', 'PRICE', 'price', 'UNIT_PRICE', 'unit_price'],
+  measurement: ['MEASUREMENT', 'measurement', 'MEASUREMENT_UNIT', 'measurement_unit', 'MEASURE', 'measure', 'UNIT_MEASURE', 'unit_measure'],
+  salesTargetPct: ['SALES_TARGET_PCT', 'sales_target_pct', 'salesTargetPct', 'TARGET_PCT', 'target_pct', 'SALES_TARGET', 'sales_target'],
+};
+
+const MASTERLIST_PAYLOAD_VARIANTS = [
+  {
+    itemType: 'ITEM_TYPE',
+    itemName: 'ITEM_NAME',
+    unit: 'ITEM_UNIT',
+    itemDesc: 'ITEM_DESC',
+    brand: 'BRAND',
+    defaultPrice: 'DEFAULT_PRICE',
+    measurement: 'MEASUREMENT',
+  },
+  {
+    itemType: 'item_type',
+    itemName: 'item_name',
+    unit: 'item_unit',
+    itemDesc: 'item_desc',
+    brand: 'brand',
+    defaultPrice: 'default_price',
+    measurement: 'measurement',
+  },
+  {
+    itemType: 'category',
+    itemName: 'item_name',
+    unit: 'unit',
+    itemDesc: 'description',
+    brand: 'brand',
+    defaultPrice: 'default_price',
+    measurement: 'measurement',
+  },
+  {
+    itemType: 'type',
+    itemName: 'name',
+    unit: 'unit',
+    itemDesc: 'description',
+    brand: 'brand',
+    defaultPrice: 'price',
+    measurement: 'measurement',
+  },
+];
+
+function detectMasterlistFieldKeys(record) {
+  return {
+    itemType: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.itemType),
+    itemName: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.itemName),
+    unit: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.unit),
+    itemDesc: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.itemDesc),
+    brand: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.brand),
+    defaultPrice: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.defaultPrice),
+    measurement: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.measurement),
+    salesTargetPct: resolvePresentFieldKey(record, MASTERLIST_FIELD_KEY_CANDIDATES.salesTargetPct),
+  };
+}
+
+function normalizeMasterlistFieldKeys(fieldKeys) {
+  if (!fieldKeys) return null;
+
+  const normalized = {};
+  Object.entries(fieldKeys).forEach(([key, value]) => {
+    if (typeof value === 'string' && value.trim()) {
+      normalized[key] = value.trim();
+    }
+  });
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function buildMasterlistPayloadFromFieldKeys(values, fieldKeys) {
+  const payload = {};
+  Object.entries(values).forEach(([key, value]) => {
+    const fieldName = fieldKeys?.[key];
+    if (!fieldName) return;
+    payload[fieldName] = value;
+  });
+  return payload;
+}
+
+function getMasterlistPayloadValues(record) {
+  return {
+    itemType: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
+    itemName: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
+    unit: sanitizeText(record?.ITEM_UNIT ?? record?.unit),
+    itemDesc: sanitizeText(record?.ITEM_DESC ?? record?.itemDesc),
+    brand: sanitizeText(record?.BRAND ?? record?.brand),
+    defaultPrice: sanitizeOptionalNumber(record?.DEFAULT_PRICE ?? record?.defaultPrice),
+    measurement: sanitizeText(record?.MEASUREMENT ?? record?.measurement),
+  };
+}
+
+function getMasterlistPayloadVariants(record, fieldKeys) {
+  const values = getMasterlistPayloadValues(record);
+  const variants = [];
+  const seen = new Set();
+
+  const pushVariant = (variantFieldKeys) => {
+    const normalizedFieldKeys = normalizeMasterlistFieldKeys(variantFieldKeys);
+    if (!normalizedFieldKeys) return;
+
+    const signature = JSON.stringify(normalizedFieldKeys);
+    if (seen.has(signature)) return;
+    seen.add(signature);
+
+    variants.push(buildMasterlistPayloadFromFieldKeys(values, normalizedFieldKeys));
+  };
+
+  pushVariant(fieldKeys);
+  MASTERLIST_PAYLOAD_VARIANTS.forEach(pushVariant);
+
+  return variants;
+}
+
+function shouldRetryMasterlistPayload(error) {
+  const message = String(error?.message || '');
+  return /Unknown attribute|Invalid document structure|Invalid row structure|Unknown column|Unknown property/i.test(message);
+}
+
+async function executeMasterlistMutation(mutate, record, fieldKeys) {
+  const payloadVariants = getMasterlistPayloadVariants(record, fieldKeys);
+  let lastError = null;
+
+  for (const payload of payloadVariants) {
+    try {
+      await mutate(payload);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryMasterlistPayload(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || normalizeAppwriteError(null, 'Unable to save the masterlist row.');
 }
 
 function normalizeMasterlistRecord(record, source = 'table') {
@@ -160,6 +317,7 @@ function normalizeMasterlistRecord(record, source = 'table') {
     defaultPrice: parseNumber(defaultPrice),
     measurement: measurement ? String(measurement).trim() : '',
     salesTargetPct: parseNumber(salesTargetPct),
+    fieldKeys: detectMasterlistFieldKeys(record),
   };
 }
 
@@ -376,19 +534,6 @@ function buildReceiptPayload(record) {
     PRICE: sanitizeRequiredNumber(record?.PRICE ?? record?.price),
     QUANTITY: sanitizeRequiredNumber(record?.QUANTITY ?? record?.quantity),
     TOTAL_PRICE: sanitizeRequiredNumber(record?.TOTAL_PRICE ?? record?.totalPrice),
-  };
-}
-
-function buildMasterlistPayload(record) {
-  return {
-    ITEM_TYPE: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
-    ITEM_NAME: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
-    ITEM_UNIT: sanitizeText(record?.ITEM_UNIT ?? record?.unit),
-    ITEM_DESC: sanitizeText(record?.ITEM_DESC ?? record?.itemDesc),
-    BRAND: sanitizeText(record?.BRAND ?? record?.brand),
-    DEFAULT_PRICE: sanitizeOptionalNumber(record?.DEFAULT_PRICE ?? record?.defaultPrice),
-    MEASUREMENT: sanitizeText(record?.MEASUREMENT ?? record?.measurement),
-    SALES_TARGET_PCT: sanitizeOptionalNumber(record?.SALES_TARGET_PCT ?? record?.salesTargetPct),
   };
 }
 
@@ -755,15 +900,17 @@ export async function deleteReceiptRecord(recordId, source) {
   });
 }
 
-export async function createMasterlistRecord(record) {
+export async function createMasterlistRecord(record, fieldKeys = null) {
   ensureDataDatabaseConfigured();
-
-  const payload = buildMasterlistPayload(record);
   const errors = [];
 
   if (masterlistTableId) {
     try {
-      await createRowInTable(masterlistTableId, payload);
+      await executeMasterlistMutation(
+        (payload) => createRowInTable(masterlistTableId, payload),
+        record,
+        fieldKeys,
+      );
       return true;
     } catch (error) {
       errors.push(error);
@@ -772,7 +919,11 @@ export async function createMasterlistRecord(record) {
 
   if (masterlistCollectionId) {
     try {
-      await createDocumentInCollection(masterlistCollectionId, payload);
+      await executeMasterlistMutation(
+        (payload) => createDocumentInCollection(masterlistCollectionId, payload),
+        record,
+        fieldKeys,
+      );
       return true;
     } catch (error) {
       errors.push(error);
@@ -785,15 +936,41 @@ export async function createMasterlistRecord(record) {
   );
 }
 
-export async function updateMasterlistRecord(recordId, source, record) {
-  await updateConfiguredRecord({
-    source,
-    recordId,
-    payload: buildMasterlistPayload(record),
-    tableId: masterlistTableId,
-    collectionId: masterlistCollectionId,
-    configurationMessage: 'Masterlist source is not configured. Set VITE_APPWRITE_MASTERLIST_TABLE_ID or VITE_APPWRITE_MASTERLIST_COLLECTION_ID.',
-  });
+export async function updateMasterlistRecord(recordId, source, record, fieldKeys = null) {
+  ensureDataDatabaseConfigured();
+
+  if (source === 'table' && masterlistTableId) {
+    await executeMasterlistMutation(
+      (payload) => tablesDb.updateRow({
+        databaseId: dataDatabaseId,
+        tableId: masterlistTableId,
+        rowId: recordId,
+        data: payload,
+      }),
+      record,
+      fieldKeys,
+    );
+    return;
+  }
+
+  if (source === 'collection' && masterlistCollectionId) {
+    await executeMasterlistMutation(
+      (payload) => databases.updateDocument({
+        databaseId: dataDatabaseId,
+        collectionId: masterlistCollectionId,
+        documentId: recordId,
+        data: payload,
+      }),
+      record,
+      fieldKeys,
+    );
+    return;
+  }
+
+  throw normalizeAppwriteError(
+    null,
+    'Masterlist source is not configured. Set VITE_APPWRITE_MASTERLIST_TABLE_ID or VITE_APPWRITE_MASTERLIST_COLLECTION_ID.',
+  );
 }
 
 export async function deleteMasterlistRecord(recordId, source) {
