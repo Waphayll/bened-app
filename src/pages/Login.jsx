@@ -43,7 +43,7 @@ export default function Login() {
     setLoading(true);
     try {
       const nextUser = await login(email.trim(), password);
-      navigate(nextUser?.isAdmin ? '/admin' : '/inventory');
+      navigate(nextUser?.isAdmin ? '/admin' : '/dashboard');
     } catch (loginError) {
       setError(loginError?.message || 'Unable to sign in. Please check your credentials.');
     } finally {
