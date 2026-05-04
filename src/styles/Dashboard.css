@@ -6,8 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 58px;
-  padding: 10px 32px;
+  min-height: 68px;
+  padding: 12px 32px;
   gap: 12px 24px;
   background: var(--white);
   border-bottom: 2px solid var(--green);
@@ -43,7 +43,7 @@
 .brand-sub {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8);
-  letter-spacing: 0.28em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--mid);
   margin-top: 2px;
@@ -59,11 +59,14 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-10);
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--mid);
   text-decoration: none;
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 14px;
   border-bottom: 2px solid transparent;
   cursor: pointer;
   background: none;
@@ -81,12 +84,13 @@
 .nav-date {
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-13);
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .user-pill {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 12px 5px 6px;
+  min-height: 48px;
+  padding: 7px 14px 7px 8px;
   border: 1px solid var(--pale);
   cursor: pointer;
   background: none;
@@ -96,7 +100,7 @@
 .user-pill:hover { border-color: var(--green); }
 
 .user-avatar {
-  width: 26px; height: 26px;
+  width: 30px; height: 30px;
   background: var(--green);
   color: var(--white);
   font-family: 'Libre Baskerville', Georgia, serif;
@@ -126,7 +130,7 @@
 .dropdown-item {
   display: block;
   width: 100%;
-  padding: 11px 16px;
+  padding: 13px 16px;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-14);
   color: var(--green-deep);
@@ -156,7 +160,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 32px 0;
+  gap: 16px;
+  padding: 24px 32px 0;
   animation: fadeUp 0.5s ease both;
 }
 
@@ -170,9 +175,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .page-title {
@@ -186,6 +191,8 @@
   font-size: var(--font-14);
   color: var(--mid);
   margin-top: 3px;
+  line-height: 1.5;
+  max-width: 52ch;
 }
 
 .order-feedback {
@@ -205,9 +212,10 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-10);
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  padding: 9px 18px;
+  min-height: 48px;
+  padding: 11px 20px;
   background: transparent;
   border: 1px solid var(--pale);
   color: var(--green);
@@ -220,9 +228,10 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-10);
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  padding: 9px 18px;
+  min-height: 48px;
+  padding: 11px 20px;
   background: var(--green);
   border: 1px solid var(--green);
   color: var(--white);
@@ -235,10 +244,10 @@
    MAIN
 ═══════════════════════════════════ */
 .dash-main {
-  padding: 14px 32px 32px;
+  padding: 18px 32px 36px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
 /* ═══════════════════════════════════
@@ -263,7 +272,7 @@
   background: var(--white);
   border: 1px solid var(--border);
   border-top: 3px solid var(--green);
-  padding: 18px 20px;
+  padding: 20px 22px;
   box-shadow: var(--shadow-sm);
   animation: fadeUp 0.5s ease both;
   animation-delay: var(--delay, 0s);
@@ -311,7 +320,7 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--mid);
   margin-bottom: 10px;
@@ -342,6 +351,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-12);
   color: var(--mid);
+  line-height: 1.55;
 }
 
 /* ═══════════════════════════════════
@@ -358,7 +368,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 18px 22px 14px;
+  gap: 16px;
+  padding: 20px 24px 16px;
   border-bottom: 1px solid var(--mist);
 }
 
@@ -373,6 +384,7 @@
   font-size: var(--font-12-5);
   color: var(--mid);
   margin-top: 2px;
+  line-height: 1.5;
 }
 
 .panel-tabs { display: flex; gap: 4px; }
@@ -391,9 +403,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .chart-period-select {
@@ -433,9 +445,10 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 5px 12px;
+  min-height: 42px;
+  padding: 8px 12px;
   border: 1px solid var(--pale);
   background: transparent;
   color: var(--mid);
@@ -503,7 +516,7 @@
   grid-template-columns: 1fr 100px 80px;
   align-items: center;
   gap: 12px;
-  padding: 10px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--mist);
   transition: background 0.15s;
 }
@@ -519,7 +532,7 @@
 .inv-qty {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: var(--mid);
   text-transform: uppercase;
 }
@@ -531,9 +544,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 3px 8px;
+  padding: 5px 10px;
   text-align: center;
 }
 .inv-badge.ok    { background: #eaf4ed; color: var(--green); }
@@ -587,9 +600,9 @@
 .sales-distribution-label {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .sales-distribution-total strong {
@@ -603,6 +616,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-13);
   color: var(--mid);
+  line-height: 1.5;
 }
 
 .sales-distribution-list {
@@ -670,6 +684,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-14);
   color: var(--mid);
+  line-height: 1.55;
 }
 
 /* ═══════════════════════════════════
@@ -679,9 +694,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8);
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .summary-toolbar {
@@ -771,7 +786,7 @@
 .summary-title {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-10);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--green-deep);
 }
@@ -813,6 +828,7 @@
 .summary-detail {
   font-size: var(--font-13);
   color: var(--mid);
+  line-height: 1.5;
 }
 
 .summary-action {
@@ -835,6 +851,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-15);
   color: var(--mid);
+  line-height: 1.6;
 }
 
 .table-panel {
@@ -883,17 +900,18 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .inventory-filter-field input,
 .inventory-filter-field select {
   width: 100%;
+  min-height: 50px;
   border: 1px solid var(--pale);
   background: var(--white);
-  padding: 10px 12px;
+  padding: 12px 14px;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-15);
   color: var(--green-ink);
@@ -929,6 +947,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-13);
   color: var(--mid);
+  line-height: 1.5;
 }
 
 .inventory-page-controls {
@@ -951,7 +970,7 @@
 .inventory-status-track {
   width: 120px;
   max-width: 100%;
-  height: 10px;
+  height: 12px;
   background: var(--mist);
   border-radius: 999px;
   overflow: hidden;
@@ -987,13 +1006,14 @@
 
 .data-table th,
 .data-table td {
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--mist);
   text-align: left;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-14);
   color: var(--green-deep);
   vertical-align: top;
+  line-height: 1.5;
 }
 
 .data-table th {
@@ -1003,9 +1023,9 @@
   background: #f8fbf8;
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
   white-space: nowrap;
 }
 
@@ -1034,7 +1054,7 @@
 }
 
 .order-modal {
-  width: min(980px, 100%);
+  width: min(1080px, 100%);
   background: var(--white);
   border: 1px solid var(--border);
   box-shadow: 0 24px 64px rgba(11, 30, 16, 0.28);
@@ -1046,7 +1066,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 24px 16px;
+  padding: 22px 24px 18px;
   border-bottom: 1px solid var(--mist);
 }
 
@@ -1062,6 +1082,8 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-14);
   color: var(--mid);
+  line-height: 1.55;
+  max-width: 56ch;
 }
 
 .receipt-mode-toggle {
@@ -1078,9 +1100,10 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 10px 14px;
   cursor: pointer;
 }
 
@@ -1111,10 +1134,10 @@
 }
 
 .order-form {
-  padding: 20px 24px 24px;
+  padding: 22px 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .order-grid {
@@ -1137,9 +1160,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .order-field input,
@@ -1150,9 +1173,10 @@
 .manual-item-field input,
 .manual-item-field select {
   width: 100%;
+  min-height: 50px;
   border: 1px solid var(--pale);
   background: var(--white);
-  padding: 10px 12px;
+  padding: 12px 14px;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-15);
   color: var(--green-ink);
@@ -1160,7 +1184,7 @@
 
 .order-field textarea {
   resize: vertical;
-  min-height: 74px;
+  min-height: 96px;
 }
 
 .order-field input:focus,
@@ -1235,9 +1259,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .manual-item-grid {
@@ -1261,9 +1285,9 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8);
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .manual-stock-panel,
@@ -1330,9 +1354,10 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 10px 11px;
+  min-height: 44px;
+  padding: 10px 12px;
   cursor: pointer;
 }
 
@@ -1362,6 +1387,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-13);
   color: var(--mid);
+  line-height: 1.5;
 }
 
 .masterlist-warning {
@@ -1374,8 +1400,8 @@
 .receipt-dropzone {
   border: 1.5px dashed var(--pale);
   background: #fafcfa;
-  min-height: 138px;
-  padding: 14px;
+  min-height: 164px;
+  padding: 18px;
   display: grid;
   place-items: center;
   text-align: center;
@@ -1401,15 +1427,71 @@
 .dropzone-hint {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .dropzone-meta {
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-13);
   color: var(--mid);
+  line-height: 1.5;
+}
+
+.scanned-text-panel {
+  margin-bottom: 1.5rem;
+  border: 1px solid #d0ddd0;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.88);
+  padding: 1rem;
+}
+
+.scanned-text-title {
+  margin: 0 0 0.75rem;
+  color: var(--green-deep);
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: var(--font-9);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.scanned-text-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.scanned-text-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.scanned-text-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2ece2;
+  border-radius: 4px;
+  background: #fff;
+  font-size: var(--font-13);
+}
+
+.scanned-text-line {
+  flex: 1;
+  margin-right: 1rem;
+  color: var(--green-deep);
+  line-height: 1.5;
+}
+
+.scanned-text-action {
+  min-height: 40px;
+  padding: 0.45rem 0.75rem;
 }
 
 .receipt-list {
@@ -1444,9 +1526,9 @@
 .receipt-size {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
 }
 
 .receipt-remove {
@@ -1456,9 +1538,10 @@
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 7px 10px;
+  min-height: 42px;
+  padding: 8px 12px;
   cursor: pointer;
 }
 
@@ -1485,6 +1568,7 @@
   font-family: 'EB Garamond', Georgia, serif;
   color: var(--mid);
   font-size: var(--font-14);
+  line-height: 1.5;
 }
 
 .receipt-table-wrap {
@@ -1501,19 +1585,20 @@
 .receipt-table th,
 .receipt-table td {
   border-bottom: 1px solid var(--mist);
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: left;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: var(--font-14);
   color: var(--green-deep);
+  line-height: 1.45;
 }
 
 .receipt-table th {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-8-5);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mid);
+  color: var(--green-deep);
   background: #f8fbf8;
 }
 
@@ -1662,7 +1747,7 @@
 
 .cand-lev {
   font-size: var(--font-10);
-  color: var(--mid);
+  color: var(--green-deep);
   background: #f0f0f0;
   border-radius: 3px;
   padding: 1px 4px;
@@ -1691,6 +1776,7 @@
   font-size: var(--font-13);
   color: var(--mid);
   font-style: italic;
+  line-height: 1.5;
 }
 /* ─────────────────────────────────────────────────────────────────────────── */
 
@@ -1745,12 +1831,13 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 16px 32px;
+  row-gap: 12px;
+  padding: 18px 32px;
   border-top: 1px solid var(--mist);
   background: var(--white);
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: var(--font-9);
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--mid);
 }
@@ -1832,6 +1919,11 @@
     padding-left: 16px;
     padding-right: 16px;
   }
+  .page-header,
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .panel-header,
   .summary-toolbar,
   .summary-list,
@@ -1865,6 +1957,13 @@
   .summary-action {
     width: 100%;
     align-self: flex-start;
+  }
+  .scanned-text-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .scanned-text-line {
+    margin-right: 0;
   }
   .order-modal-backdrop {
     padding: 62px 10px 14px;

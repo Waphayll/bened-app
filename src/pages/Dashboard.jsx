@@ -41,7 +41,9 @@ ChartJS.register(
 );
 
 ChartJS.defaults.font.family = "'EB Garamond', Georgia, serif";
-ChartJS.defaults.color = '#5a7a5a';
+ChartJS.defaults.font.size = 15;
+ChartJS.defaults.font.lineHeight = 1.35;
+ChartJS.defaults.color = '#4f6855';
 
 const ALL_MONTH_LABELS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CHART_PERIODS = {
@@ -3145,34 +3147,18 @@ export default function Dashboard() {
                 {receiptUploadError && <p className="order-form-error" style={{ marginBottom: '1rem' }}>{receiptUploadError}</p>}
 
                 {receiptDraft.scannedLines && receiptDraft.scannedLines.length > 0 && (
-                  <div className="scanned-text-panel" style={{
-                    marginBottom: '1.5rem',
-                    background: 'rgba(255,255,255,0.8)',
-                    padding: '1rem',
-                    borderRadius: '8px',
-                    border: '1px solid #d0ddd0'
-                  }}>
-                    <h4 style={{ margin: '0 0 0.75rem 0', color: '#1e4d2b', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <div className="scanned-text-panel">
+                    <h4 className="scanned-text-title">
                       Scanned Receipt Lines
                     </h4>
-                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <div className="scanned-text-scroll">
+                      <ul className="scanned-text-list">
                         {receiptDraft.scannedLines.map((line, index) => (
-                          <li key={index} style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '0.5rem',
-                            background: '#fff',
-                            borderRadius: '4px',
-                            border: '1px solid #e2ece2',
-                            fontSize: '0.9rem'
-                          }}>
-                            <span style={{ color: '#2d6e3e', flex: 1, marginRight: '1rem' }}>{line}</span>
+                          <li key={index} className="scanned-text-item">
+                            <span className="scanned-text-line">{line}</span>
                             <button
                               type="button"
-                              className="btn-outline btn-inline"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+                              className="btn-outline btn-inline scanned-text-action"
                               onClick={() => handleAddLineAsItem(line)}
                             >
                               + Add to Rows

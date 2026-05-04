@@ -5,7 +5,7 @@
   --off-white:    #f4f7f4;
   --mist:         #e8efe8;
   --pale:         #d0ddd0;
-  --mid:          #8aab8a;
+  --mid:          #4f6855;
   --green-mid:    #3a8f50;
   --green:        #2d6e3e;
   --green-deep:   #1e4d2b;
@@ -23,13 +23,73 @@
   --shadow:       rgba(11,30,16,0.18);
   --shadow-sm:    0 1px 4px rgba(11,30,16,0.07);
   --shadow-md:    0 4px 20px rgba(11,30,16,0.09);
+  --focus-ring:   rgba(30,77,43,0.24);
+  --font-7:       0.8rem;
+  --font-8:       0.84rem;
+  --font-8-5:     0.88rem;
+  --font-9:       0.92rem;
+  --font-9-5:     0.95rem;
+  --font-10:      0.98rem;
+  --font-11:      1.02rem;
+  --font-12:      1.05rem;
+  --font-12-5:    1.08rem;
+  --font-13:      1.1rem;
+  --font-14:      1.14rem;
+  --font-15:      1.18rem;
+  --font-16:      1.24rem;
+  --font-17:      1.32rem;
+  --font-18:      1.42rem;
+  --font-20:      1.54rem;
+  --font-24:      1.8rem;
+  --font-25:      1.88rem;
+  --font-26:      1.96rem;
+  --font-28:      2.12rem;
+  --font-30:      2.28rem;
 }
 
 html, body {
   height: 100%;
+}
+
+html {
+  font-size: clamp(16px, 15.4px + 0.22vw, 17.5px);
+  background: var(--off-white);
+}
+
+body {
+  min-height: 100%;
   background: var(--off-white);
   color: var(--green-ink);
   font-family: 'EB Garamond', Georgia, serif;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  line-height: 1.35;
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+::placeholder {
+  color: var(--mid);
+  opacity: 1;
 }
 
 @keyframes fadeUp {
@@ -127,6 +187,17 @@ html, body {
   max-width: 300px;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: 16px;
-  line-height: 1.4;
+  line-height: 1.55;
   color: var(--mid);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
