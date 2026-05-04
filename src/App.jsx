@@ -29,17 +29,21 @@ function RouteLoading() {
 }
 
 function getDefaultRoute(user) {
-  return user?.isAdmin ? '/admin' : '/dashboard';
+  return user?.isAdmin ? '/admin' : '/inventory';
 }
 
-function ProtectedRoute({ children }) {
+function WorkspaceRoute({ view }) {
   const { user, isLoading } = useAuth();
   const { isBootstrapping, hasBootstrapped } = useAppData();
   if (isLoading) return <AppLoader title="Loading Session" subtitle="Checking your Appwrite access..." />;
   if (user && (!hasBootstrapped || isBootstrapping)) {
     return <AppLoader title="Loading Workspace" subtitle="Fetching receipts, inventory, and masterlist data..." />;
   }
-  return user ? children : <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.isAdmin && view === 'Dashboard') {
+    return <Navigate to="/inventory" replace />;
+  }
+  return <Dashboard initialView={view} />;
 }
 
 function AdminRoute({ children }) {
@@ -50,7 +54,7 @@ function AdminRoute({ children }) {
     return <AppLoader title="Loading Admin Control" subtitle="Preparing all datasets before admin access..." />;
   }
   if (!user) return <Navigate to="/login" replace />;
-  return user.isAdmin ? children : <Navigate to="/dashboard" replace />;
+  return user.isAdmin ? children : <Navigate to="/inventory" replace />;
 }
 
 function PublicRoute({ children }) {
@@ -74,7 +78,9 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Navigate to="/login" replace />} />
               <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<WorkspaceRoute view="Dashboard" />} />
+              <Route path="/sales" element={<WorkspaceRoute view="Sales" />} />
+              <Route path="/inventory" element={<WorkspaceRoute view="Inventory" />} />
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>

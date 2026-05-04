@@ -85,6 +85,13 @@ const SALES_TABLE_FILTER_OPTIONS = [
   { value: 'last30', label: 'Last 30 Days' },
 ];
 const INVENTORY_PAGE_SIZE_OPTIONS = [50, 100, 250];
+const DASHBOARD_NAV_ITEMS = ['Dashboard', 'Sales', 'Inventory'];
+const USER_NAV_ITEMS = ['Inventory', 'Sales'];
+const NAV_VIEW_ROUTE_MAP = {
+  Dashboard: '/dashboard',
+  Sales: '/sales',
+  Inventory: '/inventory',
+};
 
 const RECEIPT_OCR_API_BASE = (
   import.meta.env.VITE_RECEIPT_OCR_API_BASE || 'http://127.0.0.1:8000'
@@ -104,13 +111,21 @@ function createManualRow() {
 }
 
 function createReceiptDraft(inputtedBy = 'User') {
+  const currentDateTime = getCurrentManilaDateTimeValue();
+  const [inputDate = '', inputTime = ''] = currentDateTime.split('T');
+
   return {
     inputtedBy,
-    inputDate: getCurrentManilaDateTimeValue(),
-    notes: '',
+    inputDate,
+    inputTime,
     scannedLines: [],
     manualRows: [createManualRow()],
   };
+}
+
+function buildReceiptDateTimeValue(inputDate, inputTime) {
+  if (!inputDate || !inputTime) return '';
+  return `${inputDate}T${inputTime}`;
 }
 
 function roundMoney(value) {
@@ -151,6 +166,30 @@ function normalizeLookup(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+}
+
+function findExactManualItemOption(options, query) {
+  const normalizedQuery = normalizeLookup(query);
+  if (!normalizedQuery) return '';
+  return options.find((option) => normalizeLookup(option) === normalizedQuery) || '';
+}
+
+function getManualItemSearchResults(options, query, limit = 8) {
+  const normalizedQuery = normalizeLookup(query);
+  const filteredOptions = normalizedQuery
+    ? options.filter((option) => normalizeLookup(option).includes(normalizedQuery))
+    : options;
+
+  return filteredOptions.slice(0, limit);
+}
+
+function getAccessibleNavItems(isAdmin) {
+  return isAdmin ? DASHBOARD_NAV_ITEMS : USER_NAV_ITEMS;
+}
+
+function resolveAccessibleView(view, isAdmin) {
+  const allowedViews = getAccessibleNavItems(isAdmin);
+  return allowedViews.includes(view) ? view : allowedViews[0];
 }
 
 function parseCsvNumber(value) {
@@ -1795,7 +1834,7 @@ function ProductChart({ products }) {
   return <Bar data={data} options={options} />;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ initialView = 'Dashboard' }) {
   const { user, logout } = useAuth();
   const {
     receiptRows,
@@ -1810,7 +1849,7 @@ export default function Dashboard() {
   } = useAppData();
   const navigate = useNavigate();
 
-  const [activeNav, setActiveNav] = useState('Dashboard');
+  const [activeNav, setActiveNav] = useState(() => resolveAccessibleView(initialView, Boolean(user?.isAdmin)));
   const [activeTab, setActiveTab] = useState('Revenue');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -1820,6 +1859,7 @@ export default function Dashboard() {
   const [receiptUploadError, setReceiptUploadError] = useState('');
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [isSendingReceipt, setIsSendingReceipt] = useState(false);
+  const [activeManualSearchRowId, setActiveManualSearchRowId] = useState(null);
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('All');
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState('All');
@@ -1935,6 +1975,16 @@ export default function Dashboard() {
     deriveInventoryStatusRows(inventoryTableRows, inventoryRows)
   ), [inventoryRows, inventoryTableRows]);
 
+  const lowStockRows = useMemo(() => (
+    inventoryTableRows
+      .filter((row) => row.inventoryLabel === 'Low Stock')
+      .sort((a, b) => (
+        (a.inventoryPct ?? 0) - (b.inventoryPct ?? 0)
+        || (Number(a.currentInv) || 0) - (Number(b.currentInv) || 0)
+        || String(a.itemName || '').localeCompare(String(b.itemName || ''))
+      ))
+  ), [inventoryTableRows]);
+
   const manualCatalogRows = useMemo(() => (
     isReceiptModalOpen ? deriveManualCatalogRows(masterlistRows, inventoryRows) : []
   ), [inventoryRows, isReceiptModalOpen, masterlistRows]);
@@ -2045,19 +2095,25 @@ export default function Dashboard() {
     displayedOrderCounts.reduce((total, value) => total + value, 0)
   ), [displayedOrderCounts]);
 
+  const navItems = useMemo(() => (
+    getAccessibleNavItems(Boolean(user?.isAdmin))
+  ), [user?.isAdmin]);
+
   const pageTitle = activeNav === 'Sales'
     ? 'Sales'
     : activeNav === 'Inventory'
       ? 'Inventory'
-      : 'Sales & Inventory Overview';
+      : 'Low Stock Alert';
 
   const pageSubtitle = activeNav === 'Sales'
     ? 'Receipt rows from the Appwrite receipts table'
     : activeNav === 'Inventory'
-      ? 'Masterlist rows joined with quantities from the Appwrite inventory table'
-      : `Live operating snapshot · ${currentYear}`;
+      ? 'Master list spreadsheet joined with live quantities from the inventory table'
+      : lowStockRows.length > 0
+        ? 'Only items currently flagged as low stock are shown here.'
+        : `No items are currently flagged as low stock · ${currentYear}`;
 
-  const showReceiptActions = activeNav !== 'Inventory';
+  const showReceiptActions = activeNav === 'Sales';
 
   const cycleSalesTargetPeriod = () => {
     setSalesTargetPeriod((current) => getNextSalesTargetPeriod(current));
@@ -2065,7 +2121,9 @@ export default function Dashboard() {
 
   const handleQuickSummaryAction = (nextView) => {
     if (!nextView) return;
-    setActiveNav(nextView);
+    const resolvedView = resolveAccessibleView(nextView, Boolean(user?.isAdmin));
+    setActiveNav(resolvedView);
+    navigate(NAV_VIEW_ROUTE_MAP[resolvedView] || '/inventory');
   };
 
   useEffect(() => {
@@ -2106,6 +2164,11 @@ export default function Dashboard() {
   }, [displayName]);
 
   useEffect(() => {
+    const nextView = resolveAccessibleView(initialView, Boolean(user?.isAdmin));
+    setActiveNav((current) => (current === nextView ? current : nextView));
+  }, [initialView, user?.isAdmin]);
+
+  useEffect(() => {
     setInventoryPage(1);
   }, [inventoryCategoryFilter, inventoryPageSize, inventorySearch, inventoryStatusFilter]);
 
@@ -2118,6 +2181,13 @@ export default function Dashboard() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleNavChange = (nextView) => {
+    const resolvedView = resolveAccessibleView(nextView, Boolean(user?.isAdmin));
+    setActiveNav(resolvedView);
+    setDropdownOpen(false);
+    navigate(NAV_VIEW_ROUTE_MAP[resolvedView] || '/inventory');
   };
 
   const handleInventorySearchChange = (value) => {
@@ -2147,6 +2217,7 @@ export default function Dashboard() {
   const openReceiptModal = () => {
     setDropdownOpen(false);
     setReceiptDraft(createReceiptDraft(displayName));
+    setActiveManualSearchRowId(null);
     setOrderFormError('');
     setReceiptUploadError('');
     setOrderFeedback('');
@@ -2155,6 +2226,7 @@ export default function Dashboard() {
 
   const closeReceiptModal = () => {
     setIsReceiptModalOpen(false);
+    setActiveManualSearchRowId(null);
     setOrderFormError('');
     setReceiptUploadError('');
     setIsSendingReceipt(false);
@@ -2183,11 +2255,22 @@ export default function Dashboard() {
       brand: UNSET_MANUAL_VARIANT_VALUE,
       price: '',
     });
+    setActiveManualSearchRowId(rowId);
   };
 
-  const handleManualItemNameChange = (rowId, itemName) => {
-    const row = receiptDraft.manualRows.find((item) => item.id === rowId);
-    const variants = manualVariantsByItemKey.get(buildInventoryKey(row?.itemType || '', itemName)) || [];
+  const applyManualItemNameSelection = (rowId, itemType, itemName) => {
+    if (!itemType || !itemName) {
+      updateManualRow(rowId, {
+        itemName,
+        unit: UNSET_MANUAL_VARIANT_VALUE,
+        itemDesc: UNSET_MANUAL_VARIANT_VALUE,
+        brand: UNSET_MANUAL_VARIANT_VALUE,
+        price: '',
+      });
+      return;
+    }
+
+    const variants = manualVariantsByItemKey.get(buildInventoryKey(itemType, itemName)) || [];
     const nextSelection = applyManualSelectionDefaults(variants, {
       unit: UNSET_MANUAL_VARIANT_VALUE,
       itemDesc: UNSET_MANUAL_VARIANT_VALUE,
@@ -2201,6 +2284,32 @@ export default function Dashboard() {
       brand: nextSelection.brand,
       price: Number.isFinite(selected?.defaultPrice) ? String(selected.defaultPrice) : '',
     });
+  };
+
+  const handleManualItemNameChange = (rowId, itemName) => {
+    const row = receiptDraft.manualRows.find((item) => item.id === rowId);
+    const itemOptions = manualItemOptionsByType.get(row?.itemType || '') || [];
+    const exactMatch = findExactManualItemOption(itemOptions, itemName);
+    setActiveManualSearchRowId(rowId);
+
+    if (!exactMatch) {
+      updateManualRow(rowId, {
+        itemName,
+        unit: UNSET_MANUAL_VARIANT_VALUE,
+        itemDesc: UNSET_MANUAL_VARIANT_VALUE,
+        brand: UNSET_MANUAL_VARIANT_VALUE,
+        price: '',
+      });
+      return;
+    }
+
+    applyManualItemNameSelection(rowId, row?.itemType || '', exactMatch);
+  };
+
+  const handleManualItemNameSelect = (rowId, itemName) => {
+    const row = receiptDraft.manualRows.find((item) => item.id === rowId);
+    applyManualItemNameSelection(rowId, row?.itemType || '', itemName);
+    setActiveManualSearchRowId(null);
   };
 
   const handleManualVariantFieldChange = (rowId, field, value) => {
@@ -2313,7 +2422,6 @@ export default function Dashboard() {
     const correctedLine = fuzzyCorrectAgainstKnownTerms(line, knownTerms);
 
     const match = findMasterlistMatch(correctedLine, '', masterlistRows);
-    console.log('[OCR Match]', { originalLine: line, correctedLine, match, matchScore: match?._matchScore, matchName: match?.itemName, matchBrand: match?.brand });
 
     let newRow;
     if (match) {
@@ -2355,13 +2463,24 @@ export default function Dashboard() {
     if (isSendingReceipt) return;
 
     setOrderFormError('');
+    const inputDateTimeValue = buildReceiptDateTimeValue(receiptDraft.inputDate, receiptDraft.inputTime);
+
+    if (!inputDateTimeValue) {
+      setOrderFormError('Select both a date and time before sending the sales entry.');
+      return;
+    }
+
     let rowsToCreate = [];
 
     const manualErrors = [];
     const normalizedRows = receiptDraft.manualRows
       .map((row, index) => {
         const quantity = Number(row.quantity);
-        const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, row.itemName)) || [];
+        const itemOptions = manualItemOptionsByType.get(row.itemType) || [];
+        const exactItemName = findExactManualItemOption(itemOptions, row.itemName);
+        const variants = exactItemName
+          ? manualVariantsByItemKey.get(buildInventoryKey(row.itemType, exactItemName)) || []
+          : [];
         const matchingVariants = getMatchingManualVariants(variants, row);
         const selectedVariant = resolveExactManualVariant(variants, row);
 
@@ -2370,8 +2489,13 @@ export default function Dashboard() {
           return null;
         }
 
+        if (!exactItemName) {
+          manualErrors.push(`Row ${index + 1}: choose an exact item from the search results.`);
+          return null;
+        }
+
         if (matchingVariants.length !== 1 || !selectedVariant) {
-          manualErrors.push(`Row ${index + 1}: choose a valid unit, description, and brand for ${row.itemName}.`);
+          manualErrors.push(`Row ${index + 1}: choose a valid unit, description, and brand for ${exactItemName}.`);
           return null;
         }
 
@@ -2395,8 +2519,7 @@ export default function Dashboard() {
         const totalPrice = roundMoney(price * quantity);
         return {
           INPUT_BY: receiptDraft.inputtedBy,
-          INPUT_DATE: receiptDraft.inputDate,
-          NOTE: receiptDraft.notes,
+          INPUT_DATE: inputDateTimeValue,
           ITEM_NAME: selectedVariant.itemName,
           ITEM_TYPE: selectedVariant.itemType,
           ITEM_UNIT: selectedVariant.unit || '',
@@ -2449,8 +2572,6 @@ export default function Dashboard() {
     }
   };
 
-  const navItems = ['Dashboard', 'Sales', 'Inventory'];
-
   return (
     <>
       <header className="topnav">
@@ -2467,7 +2588,7 @@ export default function Dashboard() {
                 type="button"
                 key={item}
                 className={`nav-link ${activeNav === item ? 'active' : ''}`}
-                onClick={() => setActiveNav(item)}
+                onClick={() => handleNavChange(item)}
               >
                 {item}
               </button>
@@ -2534,7 +2655,7 @@ export default function Dashboard() {
           id="dashboard-view-select"
           className="form-select"
           value={activeNav}
-          onChange={(event) => setActiveNav(event.target.value)}
+          onChange={(event) => handleNavChange(event.target.value)}
           aria-label="Choose dashboard section"
         >
           {navItems.map((item) => (
@@ -2545,275 +2666,57 @@ export default function Dashboard() {
 
       <main className="dash-main">
         {activeNav === 'Dashboard' && (
-          <>
-            <section className="row g-2 dashboard-kpi-strip">
-              <div className="col-12 col-md-6 col-xl-3">
-                <div className="kpi-card h-100" style={{ '--delay': '0.05s' }}>
-                  <div className="kpi-label">Total Revenue</div>
-                  <div className="kpi-value">{formatMoney(totalRevenue)}</div>
-                  <div className="kpi-delta positive">Based on receipt rows in the database</div>
+          <section className="panel low-stock-panel">
+            <div className="panel-header">
+              <div>
+                <div className="panel-title">Low Stock Alert</div>
+                <div className="panel-sub">
+                  {lowStockRows.length > 0
+                    ? `${lowStockRows.length.toLocaleString()} item${lowStockRows.length === 1 ? '' : 's'} currently flagged as low stock`
+                    : 'Every tracked item is currently above the low-stock warning level.'}
                 </div>
               </div>
+            </div>
 
-              <div className="col-12 col-md-6 col-xl-3">
-                <div className="kpi-card h-100" style={{ '--delay': '0.1s' }}>
-                  <div className="kpi-label">Orders Fulfilled</div>
-                  <div className="kpi-value">{totalOrdersInGraphWindow.toLocaleString()}</div>
-                  <div className="kpi-delta positive">{`Based on receipt rows for ${chartRange.label} ${currentYear}`}</div>
-                </div>
-              </div>
-
-              <div className="col-12 col-md-6 col-xl-3">
-                <button
-                  type="button"
-                  className="kpi-card kpi-card-button h-100"
-                  style={{ '--delay': '0.15s' }}
-                  onClick={cycleSalesTargetPeriod}
-                  aria-label={`Sales target card showing ${salesTargetMetrics.badge.toLowerCase()} quota. Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
-                  title={`Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
-                >
-                  <div className="kpi-card-head">
-                    <div className="kpi-label">Sales Target</div>
-                    <span className="kpi-chip">{salesTargetMetrics.badge}</span>
-                  </div>
-                  <div className="kpi-value">{salesTargetMetrics.progressPct.toFixed(1)}%</div>
-                  <div className={`kpi-delta ${salesTargetMetrics.tone}`}>{salesTargetMetrics.summary}</div>
-                  <div className="kpi-progress">
-                    <div
-                      className="kpi-progress-bar"
-                      style={{ width: `${salesTargetMetrics.progressBarPct}%` }}
-                    />
-                  </div>
-                  <div className="kpi-note">{salesTargetMetrics.note}</div>
-                </button>
-              </div>
-
-              <div className="col-12 col-md-6 col-xl-3">
-                <div className="kpi-card h-100" style={{ '--delay': '0.2s' }}>
-                  <div className="kpi-label">Total SKUs in Stock</div>
-                  <div className="kpi-value">{inventoryOverview.totalSkusInStock.toLocaleString()}</div>
-                  <div className={`kpi-delta ${inventoryOverview.lowStockAlertCount > 0 ? 'negative' : 'positive'}`}>
-                    {inventoryOverview.lowStockAlertCount > 0
-                      ? `▼ ${inventoryOverview.lowStockAlertCount} low-stock alert${inventoryOverview.lowStockAlertCount === 1 ? '' : 's'}`
-                      : `Based on ${inventoryOverview.trackedSkuCount.toLocaleString()} tracked SKU${inventoryOverview.trackedSkuCount === 1 ? '' : 's'} in the database`}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="row g-2 dashboard-row-two">
-              <div className="col-12 col-xl-6">
-                <div className="panel">
-                  <div className="panel-header">
-                    <div>
-                      <div className="panel-title">Monthly Sales Overview</div>
-                      <div className="panel-sub">
-                        {activeTab === 'Revenue'
-                          ? `Revenue (₱) — ${chartRange.label} ${currentYear}`
-                          : `Orders per month — ${chartRange.label} ${currentYear}`}
-                      </div>
-                    </div>
-                    <div className="panel-header-controls d-flex flex-column flex-md-row align-items-stretch align-items-md-center gap-2 gap-md-3">
-                      <select
-                        className="form-select form-select-sm chart-period-select"
-                        value={chartPeriod}
-                        onChange={(event) => setChartPeriod(event.target.value)}
-                        aria-label="Select chart period"
-                      >
-                        {Object.keys(CHART_PERIODS).map((period) => (
-                          <option key={period} value={period}>{period}</option>
-                        ))}
-                      </select>
-                      <div className="panel-tabs">
-                        {['Revenue', 'Orders'].map((tab) => (
-                          <button
-                            type="button"
-                            key={tab}
-                            className={`tab ${activeTab === tab ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab)}
-                          >
-                            {tab}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="chart-area">
-                    <SalesChart
-                      mode={activeTab}
-                      labels={chartLabels}
-                      dataSeries={activeTab === 'Revenue' ? displayedRevenue : displayedOrderCounts}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-12 col-xl-6">
-                <div className="panel panel-inventory-status">
-                  <div className="panel-header">
-                    <div>
-                      <div className="panel-title">Inventory Status</div>
-                      <div className="panel-sub">
-                        {`Stock levels by ${inventoryStatusData.groupingLabel} · lowest quantity first`}
-                      </div>
-                    </div>
-                  </div>
-                  {inventoryStatusData.rows.length > 0 ? (
-                    <div className="inv-list inv-list-scroll">
-                      {inventoryStatusData.rows.map((item) => (
-                        <div className="inv-row" key={item.name}>
-                          <div className="inv-info">
-                            <span className="inv-name">{item.name}</span>
-                            <span className="inv-qty">{item.qtyLabel}</span>
-                          </div>
-                          <div className="inv-bar-wrap">
-                            <div
-                              className="inv-bar"
-                              style={{ width: `${item.inventoryPct}%`, background: item.color }}
-                            />
-                          </div>
-                          <span className={`inv-badge ${item.inventoryBadge}`}>{item.inventoryLabel}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="panel-empty-state">
-                      <p>{inventoryError || 'No inventory rows found in the database yet.'}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="row g-2 dashboard-row-three">
-              <div className="col-12 col-xl-4">
-                <div className="panel panel-performance h-100">
-                  <div className="panel-header">
-                    <div>
-                      <div className="panel-title">Product Performance</div>
-                      <div className="panel-sub">Top 5 by units sold from receipts database</div>
-                    </div>
-                  </div>
-                  {productPerformance.length > 0 ? (
-                    <div className="chart-area chart-area-sm">
-                      <ProductChart products={productPerformance} />
-                    </div>
-                  ) : (
-                    <div className="panel-empty-state">
-                      <p>{receiptError || 'No receipt rows yet for product performance.'}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="col-12 col-xl-4">
-                <div className="panel panel-sales-distribution h-100">
-                  <div className="panel-header">
-                    <div>
-                      <div className="panel-title">Sales Distribution</div>
-                      <div className="panel-sub">Revenue share per category from the receipts database</div>
-                    </div>
-                  </div>
-
-                  {salesByCategory.length > 0 ? (
-                    <div className="sales-distribution-layout row g-3 align-items-center">
-                      <div className="col-12 col-md-6">
-                        <div className="chart-area sales-distribution-chart">
-                          <CategorySalesPieChart categories={salesByCategory} />
-                        </div>
-                      </div>
-
-                      <div className="col-12 col-md-6">
-                        <div className="sales-distribution-meta">
-                          <div className="sales-distribution-total">
-                            <span className="sales-distribution-label">Total categorized revenue</span>
-                            <strong>{formatMoney(totalRevenue)}</strong>
-                            <span>{salesByCategory.length} active categor{salesByCategory.length === 1 ? 'y' : 'ies'}</span>
-                          </div>
-
-                          <ul className="sales-distribution-list">
-                            {salesByCategory.map((category) => (
-                              <li className="sales-distribution-item" key={category.name}>
-                                <div className="sales-distribution-item-main">
-                                  <span className="sales-distribution-swatch" style={{ background: category.fill }} />
-                                  <span className="sales-distribution-name">{category.name}</span>
-                                </div>
-                                <div className="sales-distribution-item-values">
-                                  <span>{formatMoney(category.revenue)}</span>
-                                  <span>{category.shareOfTotal.toFixed(1)}%</span>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="panel-empty-state">
-                      <p>{receiptError || 'No receipt revenue yet by category.'}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="col-12 col-xl-4">
-                <div className="panel panel-summary h-100">
-                  <div className="panel-header">
-                    <div>
-                      <div className="panel-title">Quick Summary</div>
-                      <div className="panel-sub">Live highlights with jump-to-section shortcuts</div>
-                    </div>
-                    <span className="summary-count">
-                      {filteredQuickSummaryItems.length} insight{filteredQuickSummaryItems.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-
-                  <div className="summary-toolbar">
-                    {QUICK_SUMMARY_FILTERS.map((filter) => (
-                      <button
-                        type="button"
-                        key={filter}
-                        className={`summary-filter-btn btn btn-sm ${summaryFilter === filter ? 'active' : ''}`}
-                        onClick={() => setSummaryFilter(filter)}
-                        aria-pressed={summaryFilter === filter}
-                      >
-                        {filter}
-                      </button>
+            {lowStockRows.length > 0 ? (
+              <div className="data-table-wrap table-responsive low-stock-wrap">
+                <table className="data-table low-stock-table">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Item Name</th>
+                      <th>Unit</th>
+                      <th>Description</th>
+                      <th>Brand</th>
+                      <th className="table-num">Current Qty</th>
+                      <th className="table-num">Max Qty</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lowStockRows.map((row, index) => (
+                      <tr key={`${row.itemType}-${row.itemName}-${row.unit}-${index}`}>
+                        <td>{row.itemType || 'N/A'}</td>
+                        <td>{row.itemName || 'N/A'}</td>
+                        <td>{row.unit || 'N/A'}</td>
+                        <td>{row.itemDesc || 'N/A'}</td>
+                        <td>{row.brand || 'N/A'}</td>
+                        <td className="table-num">{formatQuantity(row.currentInv)}</td>
+                        <td className="table-num">{formatQuantity(row.maximumInv)}</td>
+                        <td>
+                          <span className="low-stock-chip">Low Stock</span>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-
-                  {filteredQuickSummaryItems.length > 0 ? (
-                    <ul className="summary-list">
-                      {filteredQuickSummaryItems.map((item) => (
-                        <li key={item.id}>
-                          <button
-                            type="button"
-                            className="summary-item"
-                            onClick={() => handleQuickSummaryAction(item.navTarget)}
-                          >
-                            <span className="summary-dot" style={{ background: item.color }} />
-                            <div className="summary-copy">
-                              <div className="summary-copy-head">
-                                <span className="summary-title">{item.title}</span>
-                                <span className={`summary-tone tone-${item.tone}`}>{item.label}</span>
-                              </div>
-                              <span className="summary-text">{item.text}</span>
-                              <span className="summary-detail">{item.detail}</span>
-                            </div>
-                            <span className="summary-action">{item.actionLabel}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="panel-empty-state">
-                      <p>No summary items match the current filter.</p>
-                    </div>
-                  )}
-                </div>
+                  </tbody>
+                </table>
               </div>
-            </section>
-          </>
+            ) : (
+              <div className="panel-empty-state">
+                <p>{inventoryError || 'No low-stock items were found in the current inventory snapshot.'}</p>
+              </div>
+            )}
+          </section>
         )}
 
         {activeNav === 'Sales' && (
@@ -2850,7 +2753,6 @@ export default function Dashboard() {
                     <tr>
                       <th>Input By</th>
                       <th>Input Date &amp; Time</th>
-                      <th>Note</th>
                       <th>Item Name</th>
                       <th>Category</th>
                       <th className="table-num">Price</th>
@@ -2863,7 +2765,6 @@ export default function Dashboard() {
                       <tr key={`${row.inputDate}-${row.itemName}-${index}`}>
                         <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
-                        <td>{row.note || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
                         <td>{row.itemType || 'UNMAPPED'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>
@@ -2965,7 +2866,7 @@ export default function Dashboard() {
             <section className="panel table-panel">
               <div className="panel-header">
                 <div>
-                  <div className="panel-title">Masterlist With Inventory Quantity</div>
+                  <div className="panel-title">Master List Spreadsheet</div>
                   <div className="panel-sub">
                     {filteredInventoryRows.length.toLocaleString()} visible item{filteredInventoryRows.length === 1 ? '' : 's'} · masterlist source: {masterlistSource || 'unavailable'}
                   </div>
@@ -3004,8 +2905,8 @@ export default function Dashboard() {
                 </div>
               )}
               {filteredInventoryRows.length > 0 ? (
-                <div className="data-table-wrap table-responsive">
-                  <table className="data-table">
+                <div className="data-table-wrap table-responsive masterlist-grid-wrap">
+                  <table className="data-table masterlist-grid">
                     <thead>
                       <tr>
                         <th>Category</th>
@@ -3094,28 +2995,28 @@ export default function Dashboard() {
             </div>
 
             <form className="order-form" onSubmit={handleSendReceipt}>
-              <div className="order-grid">
+              <div className="order-grid order-grid-sales-meta">
                 <label className="order-field">
-                  <span className="order-field-label">Inputted by</span>
-                  <input type="text" value={receiptDraft.inputtedBy} readOnly />
-                </label>
-                <label className="order-field">
-                  <span className="order-field-label">Input Date &amp; Time</span>
+                  <span className="order-field-label">Date</span>
                   <input
-                    type="datetime-local"
+                    type="date"
                     value={receiptDraft.inputDate}
                     onChange={(event) => updateReceiptField('inputDate', event.target.value)}
                     required
                   />
                 </label>
-                <label className="order-field order-field-full">
-                  <span className="order-field-label">Notes</span>
-                  <textarea
-                    rows="3"
-                    value={receiptDraft.notes}
-                    onChange={(event) => updateReceiptField('notes', event.target.value)}
-                    placeholder="Optional purchasing notes."
+                <label className="order-field">
+                  <span className="order-field-label">Time</span>
+                  <input
+                    type="time"
+                    value={receiptDraft.inputTime}
+                    onChange={(event) => updateReceiptField('inputTime', event.target.value)}
+                    required
                   />
+                </label>
+                <label className="order-field">
+                  <span className="order-field-label">Inputted by</span>
+                  <input type="text" value={receiptDraft.inputtedBy} readOnly />
                 </label>
               </div>
 
@@ -3179,6 +3080,10 @@ export default function Dashboard() {
                     const unitOptions = getVariantFieldOptions(variants, 'unit', row);
                     const descOptions = getVariantFieldOptions(variants, 'itemDesc', row);
                     const brandOptions = getVariantFieldOptions(variants, 'brand', row);
+                    const searchResults = row.itemType
+                      ? getManualItemSearchResults(itemOptions, row.itemName)
+                      : [];
+                    const showSearchPanel = activeManualSearchRowId === row.id && Boolean(row.itemType);
                     const priceValue = Number(row.price);
                     const rowTotal = roundMoney((Number.isFinite(priceValue) ? priceValue : 0) * Number(row.quantity || 0));
                     const availability = row.itemName && variants.length > 1 && matchingVariants.length !== 1
@@ -3224,53 +3129,88 @@ export default function Dashboard() {
                             </select>
                           </label>
 
-                          <label className="manual-item-field manual-item-field-wide">
-                            <span className="manual-item-label">Item Name</span>
-                            <select
+                          <div className="manual-item-field manual-item-field-wide manual-item-field-search">
+                            <label className="manual-item-label" htmlFor={`manual-item-name-${row.id}`}>Item Name</label>
+                            <input
+                              id={`manual-item-name-${row.id}`}
+                              type="search"
                               className={availability.selectTone}
                               title={availability.help}
                               value={row.itemName}
                               onChange={(event) => handleManualItemNameChange(row.id, event.target.value)}
+                              onFocus={() => {
+                                if (row.itemType) {
+                                  setActiveManualSearchRowId(row.id);
+                                }
+                              }}
+                              onBlur={() => {
+                                window.setTimeout(() => {
+                                  setActiveManualSearchRowId((current) => (
+                                    current === row.id ? null : current
+                                  ));
+                                }, 100);
+                              }}
+                              placeholder={row.itemType ? 'Type to search item name' : 'Select item type first'}
+                              autoComplete="off"
+                              spellCheck="false"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={showSearchPanel}
+                              aria-controls={`manual-item-search-results-${row.id}`}
                               required
                               disabled={!row.itemType}
-                            >
-                              <option value="">Select item</option>
-                              {itemOptions.map((itemName) => {
-                                const optionVariants = manualVariantsByItemKey.get(
-                                  buildInventoryKey(row.itemType, itemName),
-                                ) || [];
-                                const optionAvailability = getManualItemAvailabilityState(
-                                  optionVariants,
-                                  row.quantity,
-                                );
-                                return (
-                                  <option
-                                    key={`${row.id}-${itemName}`}
-                                    value={itemName}
-                                    disabled={optionAvailability.isBlocked}
-                                  >
-                                    {`${itemName} • ${optionAvailability.label}`}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </label>
-
-                          <label className="manual-item-field">
-                            <span className="manual-item-label">Quantity</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.quantity}
-                              onChange={(event) => updateManualRow(row.id, { quantity: event.target.value })}
-                              placeholder="0"
-                              required
                             />
-                          </label>
+                            {showSearchPanel && (
+                              <div
+                                className="manual-item-search-results"
+                                id={`manual-item-search-results-${row.id}`}
+                                role="listbox"
+                              >
+                                {searchResults.length > 0 ? (
+                                  <>
+                                    <div className="manual-item-search-meta">
+                                      {row.itemName
+                                        ? `${searchResults.length.toLocaleString()} match${searchResults.length === 1 ? '' : 'es'}`
+                                        : `Showing ${searchResults.length.toLocaleString()} item suggestion${searchResults.length === 1 ? '' : 's'}`}
+                                    </div>
+                                    {searchResults.map((itemName) => {
+                                      const optionVariants = manualVariantsByItemKey.get(
+                                        buildInventoryKey(row.itemType, itemName),
+                                      ) || [];
+                                      const optionAvailability = getManualItemAvailabilityState(
+                                        optionVariants,
+                                        row.quantity,
+                                      );
+                                      return (
+                                        <button
+                                          key={`${row.id}-${itemName}`}
+                                          type="button"
+                                          className={`manual-item-search-option ${optionAvailability.isBlocked ? 'is-disabled' : ''}`}
+                                          role="option"
+                                          aria-selected={normalizeLookup(row.itemName) === normalizeLookup(itemName)}
+                                          disabled={optionAvailability.isBlocked}
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            handleManualItemNameSelect(row.id, itemName);
+                                          }}
+                                        >
+                                          <span className="manual-item-search-name">{itemName}</span>
+                                          <span className="manual-item-search-status">{optionAvailability.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </>
+                                ) : (
+                                  <div className="manual-item-search-empty">
+                                    No matching item names were found for this search.
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
                           <label className="manual-item-field">
-                            <span className="manual-item-label">Item Unit</span>
+                            <span className="manual-item-label">Unit of Measurement (UOM)</span>
                             <select
                               value={row.unit}
                               onChange={(event) => handleManualVariantFieldChange(row.id, 'unit', event.target.value)}
@@ -3286,6 +3226,19 @@ export default function Dashboard() {
                                 </option>
                               ))}
                             </select>
+                          </label>
+
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Quantity</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.quantity}
+                              onChange={(event) => updateManualRow(row.id, { quantity: event.target.value })}
+                              placeholder="0"
+                              required
+                            />
                           </label>
 
                           <label className="manual-item-field manual-item-field-wide">
