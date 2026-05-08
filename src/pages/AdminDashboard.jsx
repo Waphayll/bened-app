@@ -58,7 +58,7 @@ function createReceiptForm(inputBy = 'Admin') {
   return {
     inputBy,
     inputDate: getCurrentManilaDateTimeValue(),
-    note: '',
+    itemUnit: '',
     itemType: '',
     itemName: '',
     price: '',
@@ -82,7 +82,7 @@ function mapReceiptToForm(record, fallbackInputBy = 'Admin') {
   return {
     inputBy: String(record?.inputBy || fallbackInputBy),
     inputDate: toReceiptDateTimeInputValue(record?.inputDate),
-    note: String(record?.note || ''),
+    itemUnit: String(record?.itemUnit || ''),
     itemType: String(record?.itemType || ''),
     itemName: String(record?.itemName || ''),
     price: Number.isFinite(Number(record?.price)) ? String(record.price) : '',
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
       const haystack = [
         row.inputBy,
         row.inputDate,
-        row.note,
+        row.itemUnit,
         row.itemType,
         row.itemName,
       ]
@@ -322,6 +322,7 @@ export default function AdminDashboard() {
   function validateReceiptForm() {
     if (!receiptForm.inputBy.trim()) return 'Input by is required.';
     if (!receiptForm.inputDate) return 'Input date is required.';
+    if (!receiptForm.itemUnit.trim()) return 'Unit of measurement is required.';
     if (!receiptForm.itemType.trim()) return 'Item type is required.';
     if (!receiptForm.itemName.trim()) return 'Item name is required.';
 
@@ -338,7 +339,7 @@ export default function AdminDashboard() {
     return {
       INPUT_BY: receiptForm.inputBy.trim(),
       INPUT_DATE: receiptForm.inputDate,
-      NOTE: receiptForm.note.trim(),
+      ITEM_UNIT: receiptForm.itemUnit.trim(),
       ITEM_TYPE: receiptForm.itemType.trim(),
       ITEM_NAME: receiptForm.itemName.trim(),
       PRICE: roundMoney(Number(receiptForm.price)),
@@ -617,6 +618,31 @@ export default function AdminDashboard() {
             <form className="admin-editor-form" onSubmit={handleReceiptSubmit}>
               <div className="admin-form-grid">
                 <label className="admin-field">
+                  <span className="admin-field-label">Input Date &amp; Time</span>
+                  <input
+                    type="datetime-local"
+                    value={receiptForm.inputDate}
+                    onChange={(event) => setReceiptForm((current) => ({
+                      ...current,
+                      inputDate: event.target.value,
+                    }))}
+                  />
+                </label>
+
+                <label className="admin-field">
+                  <span className="admin-field-label">Unit of Measurement</span>
+                  <input
+                    type="text"
+                    value={receiptForm.itemUnit}
+                    onChange={(event) => setReceiptForm((current) => ({
+                      ...current,
+                      itemUnit: event.target.value,
+                    }))}
+                    placeholder="PCS, BAG, ROLL..."
+                  />
+                </label>
+
+                <label className="admin-field">
                   <span className="admin-field-label">Input By</span>
                   <input
                     type="text"
@@ -630,18 +656,6 @@ export default function AdminDashboard() {
                 </label>
 
                 <label className="admin-field">
-                  <span className="admin-field-label">Input Date &amp; Time</span>
-                  <input
-                    type="datetime-local"
-                    value={receiptForm.inputDate}
-                    onChange={(event) => setReceiptForm((current) => ({
-                      ...current,
-                      inputDate: event.target.value,
-                    }))}
-                  />
-                </label>
-
-                <label className="admin-field">
                   <span className="admin-field-label">Category</span>
                   <input
                     type="text"
@@ -651,19 +665,6 @@ export default function AdminDashboard() {
                       itemType: event.target.value,
                     }))}
                     placeholder="Cement, Electrical, Hardware..."
-                  />
-                </label>
-
-                <label className="admin-field admin-field-wide">
-                  <span className="admin-field-label">Note</span>
-                  <input
-                    type="text"
-                    value={receiptForm.note}
-                    onChange={(event) => setReceiptForm((current) => ({
-                      ...current,
-                      note: event.target.value,
-                    }))}
-                    placeholder="Optional receipt note"
                   />
                 </label>
 
@@ -756,9 +757,9 @@ export default function AdminDashboard() {
                 <table className="data-table admin-table">
                   <thead>
                     <tr>
-                      <th>Input By</th>
                       <th>Date &amp; Time</th>
-                      <th>Note</th>
+                      <th>UOM</th>
+                      <th>Input By</th>
                       <th>Category</th>
                       <th>Item Name</th>
                       <th className="table-num">Price</th>
@@ -770,9 +771,9 @@ export default function AdminDashboard() {
                   <tbody>
                     {filteredReceiptRows.map((row, index) => (
                       <tr key={row.id || `${row.inputDate}-${row.itemName}-${index}`}>
-                        <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
-                        <td>{row.note || 'N/A'}</td>
+                        <td>{row.itemUnit || 'N/A'}</td>
+                        <td>{row.inputBy || 'N/A'}</td>
                         <td>{row.itemType || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>

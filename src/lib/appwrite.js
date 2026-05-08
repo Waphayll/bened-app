@@ -7,7 +7,7 @@ import {
   TablesDB,
 } from 'appwrite';
 
-const endpoint = 'https://raf-debian.tail848565.ts.net/v1';
+const endpoint = 'https://raf-debian-1.tail848565.ts.net/v1';
 const projectId = '69cd11c7003ce3f9532f';
 const dataDatabaseId = (
   import.meta.env.VITE_APPWRITE_DATA_DB_ID
@@ -443,6 +443,11 @@ function sanitizeRequiredNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function shouldRetryReceiptPayload(error) {
+  const message = String(error?.message || '');
+  return /Unknown attribute|Invalid document structure|Invalid row structure|Unknown column|Unknown property/i.test(message);
+}
+
 async function createRowInTable(tableId, payload) {
   return tablesDb.createRow({
     databaseId: dataDatabaseId,
@@ -524,17 +529,39 @@ async function deleteConfiguredRecord({
   throw normalizeAppwriteError(null, configurationMessage);
 }
 
-function buildReceiptPayload(record) {
-  return {
+function buildReceiptPayload(record, { unitField = 'ITEM_UNIT', includeUnit = true } = {}) {
+  const payload = {
     INPUT_BY: sanitizeText(record?.INPUT_BY ?? record?.inputBy),
     INPUT_DATE: sanitizeText(record?.INPUT_DATE ?? record?.inputDate),
-    NOTE: sanitizeText(record?.NOTE ?? record?.note ?? record?.notes),
     ITEM_NAME: sanitizeText(record?.ITEM_NAME ?? record?.itemName),
     ITEM_TYPE: sanitizeText(record?.ITEM_TYPE ?? record?.itemType),
     PRICE: sanitizeRequiredNumber(record?.PRICE ?? record?.price),
     QUANTITY: sanitizeRequiredNumber(record?.QUANTITY ?? record?.quantity),
     TOTAL_PRICE: sanitizeRequiredNumber(record?.TOTAL_PRICE ?? record?.totalPrice),
   };
+
+  if (includeUnit) {
+    const itemUnit = sanitizeText(record?.ITEM_UNIT ?? record?.itemUnit ?? record?.unit);
+    if (itemUnit) {
+      payload[unitField] = itemUnit;
+    }
+  }
+
+  return payload;
+}
+
+function getReceiptPayloadVariants(record) {
+  const itemUnit = sanitizeText(record?.ITEM_UNIT ?? record?.itemUnit ?? record?.unit);
+  const variants = [];
+
+  if (itemUnit) {
+    variants.push(buildReceiptPayload(record, { unitField: 'ITEM_UNIT' }));
+    variants.push(buildReceiptPayload(record, { unitField: 'item_unit' }));
+    variants.push(buildReceiptPayload(record, { unitField: 'unit' }));
+  }
+
+  variants.push(buildReceiptPayload(record, { includeUnit: false }));
+  return variants;
 }
 
 export async function pingAppwrite() {
@@ -837,16 +864,32 @@ export async function createReceiptRecords(records) {
 
   ensureDataDatabaseConfigured();
 
-  const payloads = records.map(buildReceiptPayload);
-
   const errors = [];
   let created = 0;
 
   if (receiptsTableId) {
     try {
-      for (const payload of payloads) {
-        await createRowInTable(receiptsTableId, payload);
-        created += 1;
+      for (const record of records) {
+        const payloadVariants = getReceiptPayloadVariants(record);
+        let saved = false;
+
+        for (let index = 0; index < payloadVariants.length; index += 1) {
+          try {
+            await createRowInTable(receiptsTableId, payloadVariants[index]);
+            created += 1;
+            saved = true;
+            break;
+          } catch (error) {
+            const hasFallback = index < payloadVariants.length - 1;
+            if (!hasFallback || !shouldRetryReceiptPayload(error)) {
+              throw error;
+            }
+          }
+        }
+
+        if (!saved) {
+          throw normalizeAppwriteError(null, 'Unable to create the receipt row in the Appwrite table.');
+        }
       }
       return created;
     } catch (error) {
@@ -857,9 +900,27 @@ export async function createReceiptRecords(records) {
 
   if (receiptsCollectionId) {
     try {
-      for (const payload of payloads) {
-        await createDocumentInCollection(receiptsCollectionId, payload);
-        created += 1;
+      for (const record of records) {
+        const payloadVariants = getReceiptPayloadVariants(record);
+        let saved = false;
+
+        for (let index = 0; index < payloadVariants.length; index += 1) {
+          try {
+            await createDocumentInCollection(receiptsCollectionId, payloadVariants[index]);
+            created += 1;
+            saved = true;
+            break;
+          } catch (error) {
+            const hasFallback = index < payloadVariants.length - 1;
+            if (!hasFallback || !shouldRetryReceiptPayload(error)) {
+              throw error;
+            }
+          }
+        }
+
+        if (!saved) {
+          throw normalizeAppwriteError(null, 'Unable to create the receipt row in the Appwrite collection.');
+        }
       }
       return created;
     } catch (error) {
@@ -880,14 +941,49 @@ export async function createReceiptRecord(record) {
 }
 
 export async function updateReceiptRecord(recordId, source, record) {
-  await updateConfiguredRecord({
-    source,
-    recordId,
-    payload: buildReceiptPayload(record),
-    tableId: receiptsTableId,
-    collectionId: receiptsCollectionId,
-    configurationMessage: 'Receipts destination is not configured. Set VITE_APPWRITE_RECEIPTS_TABLE_ID or VITE_APPWRITE_RECEIPTS_COLLECTION_ID.',
-  });
+  ensureDataDatabaseConfigured();
+  const configurationMessage = 'Receipts destination is not configured. Set VITE_APPWRITE_RECEIPTS_TABLE_ID or VITE_APPWRITE_RECEIPTS_COLLECTION_ID.';
+  const payloadVariants = getReceiptPayloadVariants(record);
+
+  if (source === 'table' && receiptsTableId) {
+    for (let index = 0; index < payloadVariants.length; index += 1) {
+      try {
+        await tablesDb.updateRow({
+          databaseId: dataDatabaseId,
+          tableId: receiptsTableId,
+          rowId: recordId,
+          data: payloadVariants[index],
+        });
+        return;
+      } catch (error) {
+        const hasFallback = index < payloadVariants.length - 1;
+        if (!hasFallback || !shouldRetryReceiptPayload(error)) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  if (source === 'collection' && receiptsCollectionId) {
+    for (let index = 0; index < payloadVariants.length; index += 1) {
+      try {
+        await databases.updateDocument({
+          databaseId: dataDatabaseId,
+          collectionId: receiptsCollectionId,
+          documentId: recordId,
+          data: payloadVariants[index],
+        });
+        return;
+      } catch (error) {
+        const hasFallback = index < payloadVariants.length - 1;
+        if (!hasFallback || !shouldRetryReceiptPayload(error)) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  throw normalizeAppwriteError(null, configurationMessage);
 }
 
 export async function deleteReceiptRecord(recordId, source) {

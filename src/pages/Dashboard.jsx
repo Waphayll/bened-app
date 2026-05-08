@@ -85,6 +85,13 @@ const SALES_TABLE_FILTER_OPTIONS = [
   { value: 'last30', label: 'Last 30 Days' },
 ];
 const INVENTORY_PAGE_SIZE_OPTIONS = [50, 100, 250];
+const DASHBOARD_NAV_ITEMS = ['Dashboard', 'Sales', 'Inventory'];
+const USER_NAV_ITEMS = ['Inventory', 'Sales'];
+const NAV_VIEW_ROUTE_MAP = {
+  Dashboard: '/dashboard',
+  Sales: '/sales',
+  Inventory: '/inventory',
+};
 
 const RECEIPT_OCR_API_BASE = (
   import.meta.env.VITE_RECEIPT_OCR_API_BASE || 'http://127.0.0.1:8000'
@@ -107,7 +114,6 @@ function createReceiptDraft(inputtedBy = 'User') {
   return {
     inputtedBy,
     inputDate: getCurrentManilaDateTimeValue(),
-    notes: '',
     scannedLines: [],
     manualRows: [createManualRow()],
   };
@@ -151,6 +157,30 @@ function normalizeLookup(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+}
+
+function findExactManualItemOption(options, query) {
+  const normalizedQuery = normalizeLookup(query);
+  if (!normalizedQuery) return '';
+  return options.find((option) => normalizeLookup(option) === normalizedQuery) || '';
+}
+
+function getManualItemSearchResults(options, query, limit = 8) {
+  const normalizedQuery = normalizeLookup(query);
+  const filteredOptions = normalizedQuery
+    ? options.filter((option) => normalizeLookup(option).includes(normalizedQuery))
+    : options;
+
+  return filteredOptions.slice(0, limit);
+}
+
+function getAccessibleNavItems(isAdmin) {
+  return isAdmin ? DASHBOARD_NAV_ITEMS : USER_NAV_ITEMS;
+}
+
+function resolveAccessibleView(view, isAdmin) {
+  const allowedViews = getAccessibleNavItems(isAdmin);
+  return allowedViews.includes(view) ? view : allowedViews[0];
 }
 
 function parseCsvNumber(value) {
@@ -1795,7 +1825,7 @@ function ProductChart({ products }) {
   return <Bar data={data} options={options} />;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ initialView = 'Dashboard' }) {
   const { user, logout } = useAuth();
   const {
     receiptRows,
@@ -1810,9 +1840,10 @@ export default function Dashboard() {
   } = useAppData();
   const navigate = useNavigate();
 
-  const [activeNav, setActiveNav] = useState('Dashboard');
+  const [activeNav, setActiveNav] = useState(() => resolveAccessibleView(initialView, Boolean(user?.isAdmin)));
   const [activeTab, setActiveTab] = useState('Revenue');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptDraft, setReceiptDraft] = useState(() => createReceiptDraft('User'));
   const [orderFeedback, setOrderFeedback] = useState('');
@@ -1823,15 +1854,21 @@ export default function Dashboard() {
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('All');
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState('All');
+  const [inventorySortConfig, setInventorySortConfig] = useState({ key: 'itemName', direction: 'asc' });
   const [inventoryPage, setInventoryPage] = useState(1);
   const [inventoryPageSize, setInventoryPageSize] = useState(100);
   const [salesTargetPeriod, setSalesTargetPeriod] = useState('day');
   const [chartPeriod, setChartPeriod] = useState('H1');
   const [summaryFilter, setSummaryFilter] = useState('All');
   const [salesTableDateFilter, setSalesTableDateFilter] = useState('all');
+  const [activeManualSearchRowId, setActiveManualSearchRowId] = useState(null);
 
   const dropdownRef = useRef(null);
+  const exportMenuRef = useRef(null);
   const receiptInputRef = useRef(null);
+  const salesChartPanelRef = useRef(null);
+  const productChartPanelRef = useRef(null);
+  const categoryChartPanelRef = useRef(null);
   const deferredInventorySearch = useDeferredValue(inventorySearch);
 
   const dateStr = new Date().toLocaleDateString('en-GB', {
@@ -1935,6 +1972,16 @@ export default function Dashboard() {
     deriveInventoryStatusRows(inventoryTableRows, inventoryRows)
   ), [inventoryRows, inventoryTableRows]);
 
+  const lowStockRows = useMemo(() => (
+    inventoryTableRows
+      .filter((row) => row.inventoryLabel === 'Low Stock')
+      .sort((a, b) => (
+        (a.inventoryPct ?? 0) - (b.inventoryPct ?? 0)
+        || (Number(a.currentInv) || 0) - (Number(b.currentInv) || 0)
+        || String(a.itemName || '').localeCompare(String(b.itemName || ''))
+      ))
+  ), [inventoryTableRows]);
+
   const manualCatalogRows = useMemo(() => (
     isReceiptModalOpen ? deriveManualCatalogRows(masterlistRows, inventoryRows) : []
   ), [inventoryRows, isReceiptModalOpen, masterlistRows]);
@@ -1997,8 +2044,7 @@ export default function Dashboard() {
 
   const filteredInventoryRows = useMemo(() => {
     const searchNeedle = normalizeLookup(deferredInventorySearch);
-
-    return inventoryTableRows.filter((row) => {
+    const matchedRows = inventoryTableRows.filter((row) => {
       if (inventoryCategoryFilter !== 'All' && row.itemType !== inventoryCategoryFilter) {
         return false;
       }
@@ -2023,7 +2069,33 @@ export default function Dashboard() {
 
       return haystack.includes(searchNeedle);
     });
-  }, [deferredInventorySearch, inventoryCategoryFilter, inventoryStatusFilter, inventoryTableRows]);
+
+    return [...matchedRows].sort((a, b) => {
+      const direction = inventorySortConfig.direction === 'desc' ? -1 : 1;
+
+      if (inventorySortConfig.key === 'defaultPrice' || inventorySortConfig.key === 'currentInv' || inventorySortConfig.key === 'inventoryPct') {
+        const aValue = Number(a?.[inventorySortConfig.key]);
+        const bValue = Number(b?.[inventorySortConfig.key]);
+        const safeA = Number.isFinite(aValue) ? aValue : -Infinity;
+        const safeB = Number.isFinite(bValue) ? bValue : -Infinity;
+        if (safeA !== safeB) return (safeA - safeB) * direction;
+      } else {
+        const aValue = String(a?.[inventorySortConfig.key] ?? a?.inventoryLabel ?? '').trim();
+        const bValue = String(b?.[inventorySortConfig.key] ?? b?.inventoryLabel ?? '').trim();
+        const comparison = aValue.localeCompare(bValue);
+        if (comparison !== 0) return comparison * direction;
+      }
+
+      return String(a?.itemName || '').localeCompare(String(b?.itemName || ''));
+    });
+  }, [
+    deferredInventorySearch,
+    inventoryCategoryFilter,
+    inventoryStatusFilter,
+    inventorySortConfig.direction,
+    inventorySortConfig.key,
+    inventoryTableRows,
+  ]);
 
   const inventoryPageCount = useMemo(() => (
     Math.max(1, Math.ceil(filteredInventoryRows.length / inventoryPageSize))
@@ -2045,6 +2117,114 @@ export default function Dashboard() {
     displayedOrderCounts.reduce((total, value) => total + value, 0)
   ), [displayedOrderCounts]);
 
+  const currentMonthReceiptRows = useMemo(() => {
+    const referenceDate = new Date();
+    const month = referenceDate.getMonth();
+    const year = referenceDate.getFullYear();
+
+    return salesTableRows.filter((row) => {
+      const parsed = parseReceiptDateValue(row?.inputDate);
+      return parsed && parsed.getMonth() === month && parsed.getFullYear() === year;
+    });
+  }, [salesTableRows]);
+
+  const currentMonthInventoryShifts = useMemo(() => {
+    const grouped = new Map();
+
+    currentMonthReceiptRows.forEach((row) => {
+      const itemType = String(row?.itemType || '').trim();
+      const itemName = String(row?.itemName || '').trim();
+      const itemUnit = String(row?.itemUnit || '').trim();
+      if (!itemName) return;
+
+      const key = [itemType, itemName, itemUnit].join('::');
+      const existing = grouped.get(key) || {
+        itemType,
+        itemName,
+        itemUnit,
+        quantity: 0,
+        revenue: 0,
+        currentInv: null,
+      };
+
+      existing.quantity += Number(row?.quantity || 0);
+      existing.revenue += Number(row?.totalPrice || 0);
+      grouped.set(key, existing);
+    });
+
+    return Array.from(grouped.values())
+      .map((row) => {
+        const inventoryMatch = inventoryTableRows.find((inventoryRow) => (
+          String(inventoryRow?.itemType || '') === row.itemType
+          && String(inventoryRow?.itemName || '') === row.itemName
+          && (
+            !row.itemUnit
+            || String(inventoryRow?.unit || '') === row.itemUnit
+          )
+        ));
+
+        return {
+          ...row,
+          revenue: roundMoney(row.revenue),
+          currentInv: Number.isFinite(inventoryMatch?.currentInv) ? inventoryMatch.currentInv : null,
+        };
+      })
+      .sort((a, b) => (
+        b.quantity - a.quantity
+        || b.revenue - a.revenue
+        || a.itemName.localeCompare(b.itemName)
+      ));
+  }, [currentMonthReceiptRows, inventoryTableRows]);
+
+  const currentMonthLabel = useMemo(() => (
+    new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date())
+  ), []);
+
+  const biReportInsights = useMemo(() => {
+    const insights = [];
+
+    if (chartLabels.length > 0 && displayedRevenue.some((value) => value > 0)) {
+      const bestRevenue = Math.max(...displayedRevenue);
+      const bestRevenueIndex = displayedRevenue.indexOf(bestRevenue);
+      insights.push(`${chartLabels[bestRevenueIndex]} delivered the strongest revenue in the selected chart window at ${formatMoney(bestRevenue)}.`);
+    } else {
+      insights.push('Revenue charts do not show booked sales yet for the selected reporting window.');
+    }
+
+    if (chartLabels.length > 1 && displayedOrderCounts.some((value) => value > 0)) {
+      const firstValue = displayedOrderCounts[0] || 0;
+      const lastValue = displayedOrderCounts[displayedOrderCounts.length - 1] || 0;
+      const delta = lastValue - firstValue;
+      if (delta > 0) {
+        insights.push(`Order activity is trending upward across the visible period, finishing ${formatQuantity(delta)} order units above where it started.`);
+      } else if (delta < 0) {
+        insights.push(`Order activity softened across the visible period, ending ${formatQuantity(Math.abs(delta))} order units below the opening month.`);
+      } else {
+        insights.push('Order activity is stable across the visible chart window with no net change between the opening and closing month.');
+      }
+    }
+
+    if (salesByCategory.length > 0) {
+      insights.push(`${salesByCategory[0].name} currently leads category revenue, contributing ${salesByCategory[0].shareOfTotal.toFixed(1)}% of categorized sales.`);
+    }
+
+    if (productPerformance.length > 0) {
+      insights.push(`${productPerformance[0].name} is the top-moving product by volume at ${formatQuantity(productPerformance[0].quantity)} units sold.`);
+    }
+
+    if (lowStockRows.length > 0) {
+      insights.push(`${lowStockRows.length.toLocaleString()} low-stock item${lowStockRows.length === 1 ? '' : 's'} need attention, led by ${lowStockRows.slice(0, 3).map((row) => row.itemName).join(', ')}.`);
+    } else {
+      insights.push('Stock levels are healthy: no catalog items are currently below their low-stock threshold.');
+    }
+
+    return insights;
+  }, [chartLabels, displayedOrderCounts, displayedRevenue, lowStockRows, productPerformance, salesByCategory]);
+
+  const navItems = useMemo(() => (
+    getAccessibleNavItems(Boolean(user?.isAdmin))
+  ), [user?.isAdmin]);
+
   const pageTitle = activeNav === 'Sales'
     ? 'Sales'
     : activeNav === 'Inventory'
@@ -2054,10 +2234,10 @@ export default function Dashboard() {
   const pageSubtitle = activeNav === 'Sales'
     ? 'Receipt rows from the Appwrite receipts table'
     : activeNav === 'Inventory'
-      ? 'Masterlist rows joined with quantities from the Appwrite inventory table'
+      ? 'Spreadsheet-style master list joined with quantities from the Appwrite inventory table'
       : `Live operating snapshot · ${currentYear}`;
 
-  const showReceiptActions = activeNav !== 'Inventory';
+  const showReceiptActions = activeNav === 'Sales';
 
   const cycleSalesTargetPeriod = () => {
     setSalesTargetPeriod((current) => getNextSalesTargetPeriod(current));
@@ -2065,13 +2245,18 @@ export default function Dashboard() {
 
   const handleQuickSummaryAction = (nextView) => {
     if (!nextView) return;
-    setActiveNav(nextView);
+    const resolvedView = resolveAccessibleView(nextView, Boolean(user?.isAdmin));
+    setActiveNav(resolvedView);
+    navigate(NAV_VIEW_ROUTE_MAP[resolvedView] || '/inventory');
   };
 
   useEffect(() => {
     const handler = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
+      }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setExportMenuOpen(false);
       }
     };
 
@@ -2106,6 +2291,11 @@ export default function Dashboard() {
   }, [displayName]);
 
   useEffect(() => {
+    const nextView = resolveAccessibleView(initialView, Boolean(user?.isAdmin));
+    setActiveNav((current) => (current === nextView ? current : nextView));
+  }, [initialView, user?.isAdmin]);
+
+  useEffect(() => {
     setInventoryPage(1);
   }, [inventoryCategoryFilter, inventoryPageSize, inventorySearch, inventoryStatusFilter]);
 
@@ -2118,6 +2308,23 @@ export default function Dashboard() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleNavChange = (nextView) => {
+    const resolvedView = resolveAccessibleView(nextView, Boolean(user?.isAdmin));
+    setActiveNav(resolvedView);
+    setDropdownOpen(false);
+    setExportMenuOpen(false);
+    navigate(NAV_VIEW_ROUTE_MAP[resolvedView] || '/inventory');
+  };
+
+  const handleInventorySortChange = (key) => {
+    setInventoryPage(1);
+    setInventorySortConfig((current) => (
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    ));
   };
 
   const handleInventorySearchChange = (value) => {
@@ -2147,6 +2354,7 @@ export default function Dashboard() {
   const openReceiptModal = () => {
     setDropdownOpen(false);
     setReceiptDraft(createReceiptDraft(displayName));
+    setActiveManualSearchRowId(null);
     setOrderFormError('');
     setReceiptUploadError('');
     setOrderFeedback('');
@@ -2155,6 +2363,7 @@ export default function Dashboard() {
 
   const closeReceiptModal = () => {
     setIsReceiptModalOpen(false);
+    setActiveManualSearchRowId(null);
     setOrderFormError('');
     setReceiptUploadError('');
     setIsSendingReceipt(false);
@@ -2183,11 +2392,27 @@ export default function Dashboard() {
       brand: UNSET_MANUAL_VARIANT_VALUE,
       price: '',
     });
+    setActiveManualSearchRowId(rowId);
   };
 
   const handleManualItemNameChange = (rowId, itemName) => {
     const row = receiptDraft.manualRows.find((item) => item.id === rowId);
-    const variants = manualVariantsByItemKey.get(buildInventoryKey(row?.itemType || '', itemName)) || [];
+    const itemOptions = manualItemOptionsByType.get(row?.itemType || '') || [];
+    const exactMatch = findExactManualItemOption(itemOptions, itemName);
+    setActiveManualSearchRowId(rowId);
+
+    if (!exactMatch) {
+      updateManualRow(rowId, {
+        itemName,
+        unit: UNSET_MANUAL_VARIANT_VALUE,
+        itemDesc: UNSET_MANUAL_VARIANT_VALUE,
+        brand: UNSET_MANUAL_VARIANT_VALUE,
+        price: '',
+      });
+      return;
+    }
+
+    const variants = manualVariantsByItemKey.get(buildInventoryKey(row?.itemType || '', exactMatch)) || [];
     const nextSelection = applyManualSelectionDefaults(variants, {
       unit: UNSET_MANUAL_VARIANT_VALUE,
       itemDesc: UNSET_MANUAL_VARIANT_VALUE,
@@ -2195,12 +2420,17 @@ export default function Dashboard() {
     });
     const selected = resolveExactManualVariant(variants, nextSelection);
     updateManualRow(rowId, {
-      itemName,
+      itemName: exactMatch,
       unit: nextSelection.unit,
       itemDesc: nextSelection.itemDesc,
       brand: nextSelection.brand,
       price: Number.isFinite(selected?.defaultPrice) ? String(selected.defaultPrice) : '',
     });
+  };
+
+  const handleManualItemNameSelect = (rowId, itemName) => {
+    handleManualItemNameChange(rowId, itemName);
+    setActiveManualSearchRowId(null);
   };
 
   const handleManualVariantFieldChange = (rowId, field, value) => {
@@ -2236,6 +2466,7 @@ export default function Dashboard() {
   };
 
   const removeManualRow = (rowId) => {
+    setActiveManualSearchRowId((current) => (current === rowId ? null : current));
     setReceiptDraft((prev) => {
       if (prev.manualRows.length === 1) return prev;
       return {
@@ -2313,7 +2544,6 @@ export default function Dashboard() {
     const correctedLine = fuzzyCorrectAgainstKnownTerms(line, knownTerms);
 
     const match = findMasterlistMatch(correctedLine, '', masterlistRows);
-    console.log('[OCR Match]', { originalLine: line, correctedLine, match, matchScore: match?._matchScore, matchName: match?.itemName, matchBrand: match?.brand });
 
     let newRow;
     if (match) {
@@ -2361,7 +2591,9 @@ export default function Dashboard() {
     const normalizedRows = receiptDraft.manualRows
       .map((row, index) => {
         const quantity = Number(row.quantity);
-        const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, row.itemName)) || [];
+        const itemOptions = manualItemOptionsByType.get(row.itemType) || [];
+        const exactItemName = findExactManualItemOption(itemOptions, row.itemName);
+        const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, exactItemName)) || [];
         const matchingVariants = getMatchingManualVariants(variants, row);
         const selectedVariant = resolveExactManualVariant(variants, row);
 
@@ -2370,8 +2602,13 @@ export default function Dashboard() {
           return null;
         }
 
+        if (!exactItemName) {
+          manualErrors.push(`Row ${index + 1}: choose an exact item from the search results.`);
+          return null;
+        }
+
         if (matchingVariants.length !== 1 || !selectedVariant) {
-          manualErrors.push(`Row ${index + 1}: choose a valid unit, description, and brand for ${row.itemName}.`);
+          manualErrors.push(`Row ${index + 1}: choose a valid unit, description, and brand for ${exactItemName}.`);
           return null;
         }
 
@@ -2396,10 +2633,9 @@ export default function Dashboard() {
         return {
           INPUT_BY: receiptDraft.inputtedBy,
           INPUT_DATE: receiptDraft.inputDate,
-          NOTE: receiptDraft.notes,
+          ITEM_UNIT: selectedVariant.unit || '',
           ITEM_NAME: selectedVariant.itemName,
           ITEM_TYPE: selectedVariant.itemType,
-          ITEM_UNIT: selectedVariant.unit || '',
           ITEM_DESC: selectedVariant.itemDesc || '',
           BRAND: selectedVariant.brand || '',
           PRICE: roundMoney(price),
@@ -2449,7 +2685,220 @@ export default function Dashboard() {
     }
   };
 
-  const navItems = ['Dashboard', 'Sales', 'Inventory'];
+  const escapeReportHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const captureChartImage = (panelRef) => {
+    const canvas = panelRef.current?.querySelector('canvas');
+    return canvas ? canvas.toDataURL('image/png') : '';
+  };
+
+  const openReportWindow = (title, contentHtml) => {
+    const reportWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!reportWindow) {
+      window.alert('Please allow pop-ups so the PDF report can open.');
+      return;
+    }
+
+    reportWindow.document.write(`<!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeReportHtml(title)}</title>
+          <style>
+            body { margin: 0; padding: 32px; font-family: Georgia, serif; color: #1d3324; background: #ffffff; }
+            h1, h2, h3 { margin: 0 0 10px; color: #1e4d2b; }
+            h1 { font-size: 28px; }
+            h2 { font-size: 18px; margin-top: 28px; }
+            p { margin: 0 0 10px; line-height: 1.55; }
+            .meta { margin-bottom: 24px; color: #4f6855; }
+            .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0 24px; }
+            .metric { border: 1px solid #d5e0d5; padding: 14px 16px; background: #f7faf7; }
+            .metric-label { display: block; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #4f6855; margin-bottom: 6px; }
+            .metric-value { display: block; font-size: 22px; color: #1e4d2b; }
+            .insights { margin: 0; padding-left: 18px; }
+            .insights li { margin-bottom: 8px; line-height: 1.55; }
+            .chart-grid { display: grid; gap: 18px; }
+            .chart-card { border: 1px solid #d5e0d5; padding: 14px; background: #fcfdfc; }
+            .chart-card img { width: 100%; height: auto; display: block; border: 1px solid #e4ece4; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th, td { border: 1px solid #d5e0d5; padding: 8px 10px; text-align: left; vertical-align: top; }
+            th { background: #edf4ee; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+            td.num, th.num { text-align: right; font-family: "Courier New", monospace; }
+            .empty { padding: 18px; border: 1px solid #d5e0d5; background: #f7faf7; color: #4f6855; }
+            @media print { body { padding: 16px; } }
+          </style>
+        </head>
+        <body>${contentHtml}</body>
+      </html>`);
+    reportWindow.document.close();
+    reportWindow.focus();
+    window.setTimeout(() => reportWindow.print(), 300);
+  };
+
+  const handleExportBiReport = () => {
+    setExportMenuOpen(false);
+
+    const chartCards = [
+      {
+        title: 'Monthly Sales Overview',
+        subtitle: `${activeTab} · ${chartRange.label} ${currentYear}`,
+        image: captureChartImage(salesChartPanelRef),
+      },
+      {
+        title: 'Product Performance',
+        subtitle: 'Top products by units sold',
+        image: captureChartImage(productChartPanelRef),
+      },
+      {
+        title: 'Sales Distribution',
+        subtitle: 'Revenue share per category',
+        image: captureChartImage(categoryChartPanelRef),
+      },
+    ].filter((card) => card.image);
+
+    const chartHtml = chartCards.length > 0
+      ? `<div class="chart-grid">${chartCards.map((card) => `
+          <section class="chart-card">
+            <h3>${escapeReportHtml(card.title)}</h3>
+            <p>${escapeReportHtml(card.subtitle)}</p>
+            <img src="${card.image}" alt="${escapeReportHtml(card.title)}" />
+          </section>
+        `).join('')}</div>`
+      : '<div class="empty">Charts were not available in the current browser session.</div>';
+
+    const lowStockTableHtml = lowStockRows.length > 0
+      ? `<table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Item Name</th>
+              <th>UOM</th>
+              <th class="num">Current Qty</th>
+              <th class="num">Max Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lowStockRows.map((row) => `
+              <tr>
+                <td>${escapeReportHtml(row.itemType || 'N/A')}</td>
+                <td>${escapeReportHtml(row.itemName || 'N/A')}</td>
+                <td>${escapeReportHtml(row.unit || 'N/A')}</td>
+                <td class="num">${escapeReportHtml(formatQuantity(row.currentInv))}</td>
+                <td class="num">${escapeReportHtml(formatQuantity(row.maximumInv))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`
+      : '<div class="empty">Stock levels healthy. No items are currently below their low-stock threshold.</div>';
+
+    openReportWindow('BI Report', `
+      <h1>Bened BI Report</h1>
+      <p class="meta">Generated ${escapeReportHtml(new Date().toLocaleString('en-PH'))}</p>
+      <div class="metrics">
+        <div class="metric"><span class="metric-label">Total Revenue</span><span class="metric-value">${escapeReportHtml(formatMoney(totalRevenue))}</span></div>
+        <div class="metric"><span class="metric-label">Orders In Window</span><span class="metric-value">${escapeReportHtml(totalOrdersInGraphWindow.toLocaleString())}</span></div>
+        <div class="metric"><span class="metric-label">Low Stock Items</span><span class="metric-value">${escapeReportHtml(lowStockRows.length.toLocaleString())}</span></div>
+      </div>
+      <h2>Data Insights</h2>
+      <ul class="insights">
+        ${biReportInsights.map((insight) => `<li>${escapeReportHtml(insight)}</li>`).join('')}
+      </ul>
+      <h2>Charts &amp; Graphs</h2>
+      ${chartHtml}
+      <h2>Low Stock Watchlist</h2>
+      ${lowStockTableHtml}
+    `);
+  };
+
+  const handleExportMonthlyReport = () => {
+    setExportMenuOpen(false);
+
+    const transactionTableHtml = currentMonthReceiptRows.length > 0
+      ? `<table>
+          <thead>
+            <tr>
+              <th>Input Datetime</th>
+              <th>UOM</th>
+              <th>Input By</th>
+              <th>Item Name</th>
+              <th>Category</th>
+              <th class="num">Qty</th>
+              <th class="num">Price</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${currentMonthReceiptRows.map((row) => `
+              <tr>
+                <td>${escapeReportHtml(formatDateValue(row.inputDate))}</td>
+                <td>${escapeReportHtml(row.itemUnit || 'N/A')}</td>
+                <td>${escapeReportHtml(row.inputBy || 'N/A')}</td>
+                <td>${escapeReportHtml(row.itemName || 'N/A')}</td>
+                <td>${escapeReportHtml(row.itemType || 'N/A')}</td>
+                <td class="num">${escapeReportHtml(formatQuantity(row.quantity))}</td>
+                <td class="num">${escapeReportHtml(formatMoney(row.price))}</td>
+                <td class="num">${escapeReportHtml(formatMoney(row.totalPrice))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`
+      : '<div class="empty">No sales transactions are recorded for the current month yet.</div>';
+
+    const shiftTableHtml = currentMonthInventoryShifts.length > 0
+      ? `<table>
+          <thead>
+            <tr>
+              <th>Item Name</th>
+              <th>Category</th>
+              <th>UOM</th>
+              <th class="num">Qty Sold</th>
+              <th class="num">Revenue Impact</th>
+              <th class="num">Current Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${currentMonthInventoryShifts.map((row) => `
+              <tr>
+                <td>${escapeReportHtml(row.itemName || 'N/A')}</td>
+                <td>${escapeReportHtml(row.itemType || 'N/A')}</td>
+                <td>${escapeReportHtml(row.itemUnit || 'N/A')}</td>
+                <td class="num">${escapeReportHtml(formatQuantity(row.quantity))}</td>
+                <td class="num">${escapeReportHtml(formatMoney(row.revenue))}</td>
+                <td class="num">${escapeReportHtml(formatQuantity(row.currentInv))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`
+      : '<div class="empty">No inventory movement summary is available for the current month yet.</div>';
+
+    const monthlyRevenue = currentMonthReceiptRows.reduce((total, row) => total + Number(row?.totalPrice || 0), 0);
+    const monthlyUnits = currentMonthReceiptRows.reduce((total, row) => total + Number(row?.quantity || 0), 0);
+
+    openReportWindow('Monthly Report', `
+      <h1>Bened Monthly Report</h1>
+      <p class="meta">${escapeReportHtml(currentMonthLabel)} · generated ${escapeReportHtml(new Date().toLocaleString('en-PH'))}</p>
+      <div class="metrics">
+        <div class="metric"><span class="metric-label">Transaction Rows</span><span class="metric-value">${escapeReportHtml(currentMonthReceiptRows.length.toLocaleString())}</span></div>
+        <div class="metric"><span class="metric-label">Monthly Revenue</span><span class="metric-value">${escapeReportHtml(formatMoney(monthlyRevenue))}</span></div>
+        <div class="metric"><span class="metric-label">Units Sold</span><span class="metric-value">${escapeReportHtml(formatQuantity(monthlyUnits))}</span></div>
+      </div>
+      <h2>Current Month Transactions</h2>
+      ${transactionTableHtml}
+      <h2>Inventory Shift Summary</h2>
+      ${shiftTableHtml}
+    `);
+  };
+
+  const getInventorySortMarker = (key) => (
+    inventorySortConfig.key === key
+      ? (inventorySortConfig.direction === 'asc' ? '↑' : '↓')
+      : '↕'
+  );
 
   return (
     <>
@@ -2467,7 +2916,7 @@ export default function Dashboard() {
                 type="button"
                 key={item}
                 className={`nav-link ${activeNav === item ? 'active' : ''}`}
-                onClick={() => setActiveNav(item)}
+                onClick={() => handleNavChange(item)}
               >
                 {item}
               </button>
@@ -2522,6 +2971,29 @@ export default function Dashboard() {
           {orderFeedback && <p className="order-feedback">{orderFeedback}</p>}
         </div>
         <div className="header-actions d-flex flex-column flex-sm-row">
+          {activeNav === 'Dashboard' && (
+            <div className="export-menu-shell" ref={exportMenuRef}>
+              <button
+                type="button"
+                className="btn-outline export-menu-trigger"
+                onClick={() => setExportMenuOpen((current) => !current)}
+                aria-expanded={exportMenuOpen}
+                aria-haspopup="menu"
+              >
+                Export Report
+              </button>
+              {exportMenuOpen && (
+                <div className="export-menu-dropdown" role="menu">
+                  <button type="button" className="dropdown-item" role="menuitem" onClick={handleExportBiReport}>
+                    BI Report (PDF)
+                  </button>
+                  <button type="button" className="dropdown-item" role="menuitem" onClick={handleExportMonthlyReport}>
+                    Monthly Report (PDF)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {showReceiptActions && (
             <button type="button" className="btn-solid" onClick={openReceiptModal}>Input Receipt</button>
           )}
@@ -2534,7 +3006,7 @@ export default function Dashboard() {
           id="dashboard-view-select"
           className="form-select"
           value={activeNav}
-          onChange={(event) => setActiveNav(event.target.value)}
+          onChange={(event) => handleNavChange(event.target.value)}
           aria-label="Choose dashboard section"
         >
           {navItems.map((item) => (
@@ -2638,7 +3110,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="chart-area">
+                  <div className="chart-area" ref={salesChartPanelRef}>
                     <SalesChart
                       mode={activeTab}
                       labels={chartLabels}
@@ -2654,31 +3126,41 @@ export default function Dashboard() {
                     <div>
                       <div className="panel-title">Inventory Status</div>
                       <div className="panel-sub">
-                        {`Stock levels by ${inventoryStatusData.groupingLabel} · lowest quantity first`}
+                        {lowStockRows.length > 0
+                          ? `${lowStockRows.length.toLocaleString()} item${lowStockRows.length === 1 ? '' : 's'} currently below the low-stock threshold`
+                          : 'Stock levels healthy'}
                       </div>
                     </div>
                   </div>
-                  {inventoryStatusData.rows.length > 0 ? (
-                    <div className="inv-list inv-list-scroll">
-                      {inventoryStatusData.rows.map((item) => (
-                        <div className="inv-row" key={item.name}>
-                          <div className="inv-info">
-                            <span className="inv-name">{item.name}</span>
-                            <span className="inv-qty">{item.qtyLabel}</span>
-                          </div>
-                          <div className="inv-bar-wrap">
-                            <div
-                              className="inv-bar"
-                              style={{ width: `${item.inventoryPct}%`, background: item.color }}
-                            />
-                          </div>
-                          <span className={`inv-badge ${item.inventoryBadge}`}>{item.inventoryLabel}</span>
-                        </div>
-                      ))}
+                  {lowStockRows.length > 0 ? (
+                    <div className="data-table-wrap table-responsive low-stock-dashboard-wrap">
+                      <table className="data-table low-stock-dashboard-table">
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Category</th>
+                            <th>UOM</th>
+                            <th className="table-num">Current</th>
+                            <th className="table-num">Max</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lowStockRows.map((row, index) => (
+                            <tr key={`${row.itemType}-${row.itemName}-${index}`}>
+                              <td>{row.itemName || 'N/A'}</td>
+                              <td>{row.itemType || 'N/A'}</td>
+                              <td>{row.unit || 'N/A'}</td>
+                              <td className="table-num">{formatQuantity(row.currentInv)}</td>
+                              <td className="table-num">{formatQuantity(row.maximumInv)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
-                    <div className="panel-empty-state">
-                      <p>{inventoryError || 'No inventory rows found in the database yet.'}</p>
+                    <div className="panel-empty-state panel-healthy-state">
+                      <p>{inventoryError || 'Stock levels healthy.'}</p>
+                      {!inventoryError && <span>All tracked items are currently above their low-stock threshold.</span>}
                     </div>
                   )}
                 </div>
@@ -2695,7 +3177,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   {productPerformance.length > 0 ? (
-                    <div className="chart-area chart-area-sm">
+                    <div className="chart-area chart-area-sm" ref={productChartPanelRef}>
                       <ProductChart products={productPerformance} />
                     </div>
                   ) : (
@@ -2718,7 +3200,7 @@ export default function Dashboard() {
                   {salesByCategory.length > 0 ? (
                     <div className="sales-distribution-layout row g-3 align-items-center">
                       <div className="col-12 col-md-6">
-                        <div className="chart-area sales-distribution-chart">
+                        <div className="chart-area sales-distribution-chart" ref={categoryChartPanelRef}>
                           <CategorySalesPieChart categories={salesByCategory} />
                         </div>
                       </div>
@@ -2848,9 +3330,9 @@ export default function Dashboard() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Input By</th>
                       <th>Input Date &amp; Time</th>
-                      <th>Note</th>
+                      <th>UOM</th>
+                      <th>Input By</th>
                       <th>Item Name</th>
                       <th>Category</th>
                       <th className="table-num">Price</th>
@@ -2861,9 +3343,9 @@ export default function Dashboard() {
                   <tbody>
                     {filteredSalesTableRows.map((row, index) => (
                       <tr key={`${row.inputDate}-${row.itemName}-${index}`}>
-                        <td>{row.inputBy || 'N/A'}</td>
                         <td>{formatDateValue(row.inputDate)}</td>
-                        <td>{row.note || 'N/A'}</td>
+                        <td>{row.itemUnit || 'N/A'}</td>
+                        <td>{row.inputBy || 'N/A'}</td>
                         <td>{row.itemName || 'N/A'}</td>
                         <td>{row.itemType || 'UNMAPPED'}</td>
                         <td className="table-num">{formatMoney(row.price)}</td>
@@ -2965,7 +3447,7 @@ export default function Dashboard() {
             <section className="panel table-panel">
               <div className="panel-header">
                 <div>
-                  <div className="panel-title">Masterlist With Inventory Quantity</div>
+                  <div className="panel-title">Master List Spreadsheet</div>
                   <div className="panel-sub">
                     {filteredInventoryRows.length.toLocaleString()} visible item{filteredInventoryRows.length === 1 ? '' : 's'} · masterlist source: {masterlistSource || 'unavailable'}
                   </div>
@@ -3004,19 +3486,64 @@ export default function Dashboard() {
                 </div>
               )}
               {filteredInventoryRows.length > 0 ? (
-                <div className="data-table-wrap table-responsive">
-                  <table className="data-table">
+                <div className="data-table-wrap table-responsive masterlist-grid-wrap">
+                  <table className="data-table masterlist-grid">
                     <thead>
                       <tr>
-                        <th>Category</th>
-                        <th>Item Name</th>
-                        <th>Item Unit</th>
-                        <th>Description</th>
-                        <th>Brand</th>
-                        <th className="table-num">Price</th>
-                        <th>Measure</th>
-                        <th className="table-num">Current Qty</th>
-                        <th>Status</th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('itemType')}>
+                            <span>Category</span>
+                            <span className="table-head-sort">{getInventorySortMarker('itemType')}</span>
+                          </button>
+                        </th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('itemName')}>
+                            <span>Item Name</span>
+                            <span className="table-head-sort">{getInventorySortMarker('itemName')}</span>
+                          </button>
+                        </th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('unit')}>
+                            <span>Item Unit</span>
+                            <span className="table-head-sort">{getInventorySortMarker('unit')}</span>
+                          </button>
+                        </th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('itemDesc')}>
+                            <span>Description</span>
+                            <span className="table-head-sort">{getInventorySortMarker('itemDesc')}</span>
+                          </button>
+                        </th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('brand')}>
+                            <span>Brand</span>
+                            <span className="table-head-sort">{getInventorySortMarker('brand')}</span>
+                          </button>
+                        </th>
+                        <th className="table-num">
+                          <button type="button" className="table-head-button table-head-button-num" onClick={() => handleInventorySortChange('defaultPrice')}>
+                            <span>Price</span>
+                            <span className="table-head-sort">{getInventorySortMarker('defaultPrice')}</span>
+                          </button>
+                        </th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('measurement')}>
+                            <span>Measure</span>
+                            <span className="table-head-sort">{getInventorySortMarker('measurement')}</span>
+                          </button>
+                        </th>
+                        <th className="table-num">
+                          <button type="button" className="table-head-button table-head-button-num" onClick={() => handleInventorySortChange('currentInv')}>
+                            <span>Current Qty</span>
+                            <span className="table-head-sort">{getInventorySortMarker('currentInv')}</span>
+                          </button>
+                        </th>
+                        <th>
+                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('inventoryLabel')}>
+                            <span>Status</span>
+                            <span className="table-head-sort">{getInventorySortMarker('inventoryLabel')}</span>
+                          </button>
+                        </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3096,10 +3623,6 @@ export default function Dashboard() {
             <form className="order-form" onSubmit={handleSendReceipt}>
               <div className="order-grid">
                 <label className="order-field">
-                  <span className="order-field-label">Inputted by</span>
-                  <input type="text" value={receiptDraft.inputtedBy} readOnly />
-                </label>
-                <label className="order-field">
                   <span className="order-field-label">Input Date &amp; Time</span>
                   <input
                     type="datetime-local"
@@ -3108,14 +3631,9 @@ export default function Dashboard() {
                     required
                   />
                 </label>
-                <label className="order-field order-field-full">
-                  <span className="order-field-label">Notes</span>
-                  <textarea
-                    rows="3"
-                    value={receiptDraft.notes}
-                    onChange={(event) => updateReceiptField('notes', event.target.value)}
-                    placeholder="Optional purchasing notes."
-                  />
+                <label className="order-field">
+                  <span className="order-field-label">Inputted by</span>
+                  <input type="text" value={receiptDraft.inputtedBy} readOnly />
                 </label>
               </div>
 
@@ -3179,6 +3697,10 @@ export default function Dashboard() {
                     const unitOptions = getVariantFieldOptions(variants, 'unit', row);
                     const descOptions = getVariantFieldOptions(variants, 'itemDesc', row);
                     const brandOptions = getVariantFieldOptions(variants, 'brand', row);
+                    const searchResults = row.itemType
+                      ? getManualItemSearchResults(itemOptions, row.itemName)
+                      : [];
+                    const showSearchPanel = activeManualSearchRowId === row.id && Boolean(row.itemType);
                     const priceValue = Number(row.price);
                     const rowTotal = roundMoney((Number.isFinite(priceValue) ? priceValue : 0) * Number(row.quantity || 0));
                     const availability = row.itemName && variants.length > 1 && matchingVariants.length !== 1
@@ -3224,53 +3746,88 @@ export default function Dashboard() {
                             </select>
                           </label>
 
-                          <label className="manual-item-field manual-item-field-wide">
-                            <span className="manual-item-label">Item Name</span>
-                            <select
+                          <div className="manual-item-field manual-item-field-wide manual-item-field-search">
+                            <label className="manual-item-label" htmlFor={`manual-item-name-${row.id}`}>Item Name</label>
+                            <input
+                              id={`manual-item-name-${row.id}`}
+                              type="search"
                               className={availability.selectTone}
                               title={availability.help}
                               value={row.itemName}
                               onChange={(event) => handleManualItemNameChange(row.id, event.target.value)}
+                              onFocus={() => {
+                                if (row.itemType) {
+                                  setActiveManualSearchRowId(row.id);
+                                }
+                              }}
+                              onBlur={() => {
+                                window.setTimeout(() => {
+                                  setActiveManualSearchRowId((current) => (
+                                    current === row.id ? null : current
+                                  ));
+                                }, 100);
+                              }}
+                              placeholder={row.itemType ? 'Type to search item name' : 'Select item type first'}
+                              autoComplete="off"
+                              spellCheck="false"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={showSearchPanel}
+                              aria-controls={`manual-item-search-results-${row.id}`}
                               required
                               disabled={!row.itemType}
-                            >
-                              <option value="">Select item</option>
-                              {itemOptions.map((itemName) => {
-                                const optionVariants = manualVariantsByItemKey.get(
-                                  buildInventoryKey(row.itemType, itemName),
-                                ) || [];
-                                const optionAvailability = getManualItemAvailabilityState(
-                                  optionVariants,
-                                  row.quantity,
-                                );
-                                return (
-                                  <option
-                                    key={`${row.id}-${itemName}`}
-                                    value={itemName}
-                                    disabled={optionAvailability.isBlocked}
-                                  >
-                                    {`${itemName} • ${optionAvailability.label}`}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </label>
-
-                          <label className="manual-item-field">
-                            <span className="manual-item-label">Quantity</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.quantity}
-                              onChange={(event) => updateManualRow(row.id, { quantity: event.target.value })}
-                              placeholder="0"
-                              required
                             />
-                          </label>
+                            {showSearchPanel && (
+                              <div
+                                className="manual-item-search-results"
+                                id={`manual-item-search-results-${row.id}`}
+                                role="listbox"
+                              >
+                                {searchResults.length > 0 ? (
+                                  <>
+                                    <div className="manual-item-search-meta">
+                                      {row.itemName
+                                        ? `${searchResults.length.toLocaleString()} match${searchResults.length === 1 ? '' : 'es'}`
+                                        : `Showing ${searchResults.length.toLocaleString()} item suggestion${searchResults.length === 1 ? '' : 's'}`}
+                                    </div>
+                                    {searchResults.map((itemName) => {
+                                      const optionVariants = manualVariantsByItemKey.get(
+                                        buildInventoryKey(row.itemType, itemName),
+                                      ) || [];
+                                      const optionAvailability = getManualItemAvailabilityState(
+                                        optionVariants,
+                                        row.quantity,
+                                      );
+                                      return (
+                                        <button
+                                          key={`${row.id}-${itemName}`}
+                                          type="button"
+                                          className={`manual-item-search-option ${optionAvailability.isBlocked ? 'is-disabled' : ''}`}
+                                          role="option"
+                                          aria-selected={normalizeLookup(row.itemName) === normalizeLookup(itemName)}
+                                          disabled={optionAvailability.isBlocked}
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            handleManualItemNameSelect(row.id, itemName);
+                                          }}
+                                        >
+                                          <span className="manual-item-search-name">{itemName}</span>
+                                          <span className="manual-item-search-status">{optionAvailability.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </>
+                                ) : (
+                                  <div className="manual-item-search-empty">
+                                    No matching item names were found for this search.
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
                           <label className="manual-item-field">
-                            <span className="manual-item-label">Item Unit</span>
+                            <span className="manual-item-label">Unit of Measurement (UOM)</span>
                             <select
                               value={row.unit}
                               onChange={(event) => handleManualVariantFieldChange(row.id, 'unit', event.target.value)}
@@ -3286,6 +3843,19 @@ export default function Dashboard() {
                                 </option>
                               ))}
                             </select>
+                          </label>
+
+                          <label className="manual-item-field">
+                            <span className="manual-item-label">Quantity</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.quantity}
+                              onChange={(event) => updateManualRow(row.id, { quantity: event.target.value })}
+                              placeholder="0"
+                              required
+                            />
                           </label>
 
                           <label className="manual-item-field manual-item-field-wide">
