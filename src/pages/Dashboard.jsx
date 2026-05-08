@@ -1863,8 +1863,25 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   const [salesTableDateFilter, setSalesTableDateFilter] = useState('all');
   const [activeManualTypeSearchRowId, setActiveManualTypeSearchRowId] = useState(null);
   const [activeManualSearchRowId, setActiveManualSearchRowId] = useState(null);
+  const [columnToggleOpen, setColumnToggleOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(() => new Set([
+    'itemType', 'itemName', 'unit', 'brand', 'defaultPrice', 'currentInv', 'inventoryLabel',
+  ]));
+
+  const INVENTORY_COLUMNS = useMemo(() => [
+    { key: 'itemType', label: 'Category', className: '', alwaysVisible: false },
+    { key: 'itemName', label: 'Item Name', className: 'col-item-name', alwaysVisible: true },
+    { key: 'unit', label: 'Item Unit', className: '', alwaysVisible: false },
+    { key: 'itemDesc', label: 'Description', className: 'col-description', alwaysVisible: false },
+    { key: 'brand', label: 'Brand', className: '', alwaysVisible: false },
+    { key: 'defaultPrice', label: 'Price', className: '', isNum: true, alwaysVisible: false },
+    { key: 'measurement', label: 'Measure', className: '', alwaysVisible: false },
+    { key: 'currentInv', label: 'Current Qty', className: '', isNum: true, alwaysVisible: false },
+    { key: 'inventoryLabel', label: 'Status', className: '', alwaysVisible: false, isStatus: true },
+  ], []);
 
   const dropdownRef = useRef(null);
+  const columnToggleRef = useRef(null);
 
   const receiptInputRef = useRef(null);
   const salesChartPanelRef = useRef(null);
@@ -2256,7 +2273,9 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
-
+      if (columnToggleRef.current && !columnToggleRef.current.contains(event.target)) {
+        setColumnToggleOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handler);
@@ -2324,6 +2343,20 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
         ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
         : { key, direction: 'asc' }
     ));
+  };
+
+  const toggleColumn = (columnKey) => {
+    const col = INVENTORY_COLUMNS.find((c) => c.key === columnKey);
+    if (col?.alwaysVisible) return;
+    setVisibleColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(columnKey)) {
+        next.delete(columnKey);
+      } else {
+        next.add(columnKey);
+      }
+      return next;
+    });
   };
 
   const handleInventorySearchChange = (value) => {
@@ -2737,15 +2770,26 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
             .metric-value { display: block; font-size: 22px; color: #1e4d2b; }
             .insights { margin: 0; padding-left: 18px; }
             .insights li { margin-bottom: 8px; line-height: 1.55; }
-            .chart-grid { display: grid; gap: 18px; }
-            .chart-card { border: 1px solid #d5e0d5; padding: 14px; background: #fcfdfc; }
-            .chart-card img { width: 100%; height: auto; display: block; border: 1px solid #e4ece4; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th, td { border: 1px solid #d5e0d5; padding: 8px 10px; text-align: left; vertical-align: top; }
-            th { background: #edf4ee; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+            .chart-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; page-break-inside: avoid; }
+            .chart-card { border: 1px solid #d5e0d5; padding: 10px; background: #fcfdfc; }
+            .chart-card h3 { font-size: 14px; margin-bottom: 4px; }
+            .chart-card p { font-size: 11px; margin-bottom: 8px; }
+            .chart-card img { width: 100%; height: auto; display: block; border: 1px solid #e4ece4; max-height: 220px; object-fit: contain; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+            th, td { border: 1px solid #d5e0d5; padding: 6px 8px; text-align: left; vertical-align: top; }
+            th { background: #edf4ee; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
             td.num, th.num { text-align: right; font-family: "Courier New", monospace; }
             .empty { padding: 18px; border: 1px solid #d5e0d5; background: #f7faf7; color: #4f6855; }
-            @media print { body { padding: 16px; } }
+            @media print { 
+              body { padding: 0; font-size: 12px; }
+              h1 { font-size: 20px; }
+              h2 { font-size: 16px; margin-top: 12px; }
+              p { margin: 0 0 6px; }
+              .metrics { margin: 12px 0; }
+              .metric { padding: 8px 12px; }
+              .metric-value { font-size: 18px; }
+              .insights li { margin-bottom: 4px; }
+            }
           </style>
         </head>
         <body>${contentHtml}</body>
@@ -3199,36 +3243,32 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                   </div>
 
                   {salesByCategory.length > 0 ? (
-                    <div className="sales-distribution-layout row g-3 align-items-center">
-                      <div className="col-12 col-md-6">
-                        <div className="chart-area sales-distribution-chart" ref={categoryChartPanelRef}>
-                          <CategorySalesPieChart categories={salesByCategory} />
-                        </div>
+                    <div className="sales-distribution-layout">
+                      <div className="chart-area sales-distribution-chart" ref={categoryChartPanelRef}>
+                        <CategorySalesPieChart categories={salesByCategory} />
                       </div>
 
-                      <div className="col-12 col-md-6">
-                        <div className="sales-distribution-meta">
-                          <div className="sales-distribution-total">
-                            <span className="sales-distribution-label">Total categorized revenue</span>
-                            <strong>{formatMoney(totalRevenue)}</strong>
-                            <span>{salesByCategory.length} active categor{salesByCategory.length === 1 ? 'y' : 'ies'}</span>
-                          </div>
-
-                          <ul className="sales-distribution-list">
-                            {salesByCategory.map((category) => (
-                              <li className="sales-distribution-item" key={category.name}>
-                                <div className="sales-distribution-item-main">
-                                  <span className="sales-distribution-swatch" style={{ background: category.fill }} />
-                                  <span className="sales-distribution-name">{category.name}</span>
-                                </div>
-                                <div className="sales-distribution-item-values">
-                                  <span>{formatMoney(category.revenue)}</span>
-                                  <span>{category.shareOfTotal.toFixed(1)}%</span>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                      <div className="sales-distribution-meta">
+                        <div className="sales-distribution-total">
+                          <span className="sales-distribution-label">Revenue</span>
+                          <strong>{formatMoney(totalRevenue)}</strong>
+                          <span>· {salesByCategory.length} categor{salesByCategory.length === 1 ? 'y' : 'ies'}</span>
                         </div>
+
+                        <ul className="sales-distribution-list">
+                          {salesByCategory.map((category) => (
+                            <li className="sales-distribution-item" key={category.name}>
+                              <div className="sales-distribution-item-main">
+                                <span className="sales-distribution-swatch" style={{ background: category.fill }} />
+                                <span className="sales-distribution-name">{category.name}</span>
+                              </div>
+                              <div className="sales-distribution-item-values">
+                                <span>{formatMoney(category.revenue)}</span>
+                                <span>{category.shareOfTotal.toFixed(1)}%</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
                   ) : (
@@ -3454,9 +3494,45 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                   </div>
                 </div>
                 <div className="inventory-table-toolbar">
-                  <span className="inventory-table-summary">
-                    Showing {inventoryRangeStart.toLocaleString()}-{inventoryRangeEnd.toLocaleString()} of {filteredInventoryRows.length.toLocaleString()}
-                  </span>
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
+                    <span className="inventory-table-summary">
+                      Showing {inventoryRangeStart.toLocaleString()}-{inventoryRangeEnd.toLocaleString()} of {filteredInventoryRows.length.toLocaleString()}
+                    </span>
+                    <div className="column-toggle-shell" ref={columnToggleRef}>
+                      <button
+                        type="button"
+                        className="column-toggle-btn"
+                        onClick={() => setColumnToggleOpen((c) => !c)}
+                        aria-expanded={columnToggleOpen}
+                        aria-haspopup="menu"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                        </svg>
+                        Columns
+                      </button>
+                      {columnToggleOpen && (
+                        <div className="column-toggle-dropdown" role="menu">
+                          {INVENTORY_COLUMNS.map((col) => (
+                            <button
+                              type="button"
+                              key={col.key}
+                              className="column-toggle-option"
+                              role="menuitemcheckbox"
+                              aria-checked={visibleColumns.has(col.key)}
+                              disabled={col.alwaysVisible}
+                              onClick={() => toggleColumn(col.key)}
+                            >
+                              <span className={`column-toggle-check ${visibleColumns.has(col.key) ? 'is-checked' : ''}`}>
+                                {visibleColumns.has(col.key) ? '✓' : ''}
+                              </span>
+                              {col.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="inventory-page-controls">
                     <button
                       type="button"
@@ -3491,87 +3567,54 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                   <table className="data-table masterlist-grid">
                     <thead>
                       <tr>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('itemType')}>
-                            <span>Category</span>
-                            <span className="table-head-sort">{getInventorySortMarker('itemType')}</span>
-                          </button>
-                        </th>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('itemName')}>
-                            <span>Item Name</span>
-                            <span className="table-head-sort">{getInventorySortMarker('itemName')}</span>
-                          </button>
-                        </th>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('unit')}>
-                            <span>Item Unit</span>
-                            <span className="table-head-sort">{getInventorySortMarker('unit')}</span>
-                          </button>
-                        </th>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('itemDesc')}>
-                            <span>Description</span>
-                            <span className="table-head-sort">{getInventorySortMarker('itemDesc')}</span>
-                          </button>
-                        </th>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('brand')}>
-                            <span>Brand</span>
-                            <span className="table-head-sort">{getInventorySortMarker('brand')}</span>
-                          </button>
-                        </th>
-                        <th className="table-num">
-                          <button type="button" className="table-head-button table-head-button-num" onClick={() => handleInventorySortChange('defaultPrice')}>
-                            <span>Price</span>
-                            <span className="table-head-sort">{getInventorySortMarker('defaultPrice')}</span>
-                          </button>
-                        </th>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('measurement')}>
-                            <span>Measure</span>
-                            <span className="table-head-sort">{getInventorySortMarker('measurement')}</span>
-                          </button>
-                        </th>
-                        <th className="table-num">
-                          <button type="button" className="table-head-button table-head-button-num" onClick={() => handleInventorySortChange('currentInv')}>
-                            <span>Current Qty</span>
-                            <span className="table-head-sort">{getInventorySortMarker('currentInv')}</span>
-                          </button>
-                        </th>
-                        <th>
-                          <button type="button" className="table-head-button" onClick={() => handleInventorySortChange('inventoryLabel')}>
-                            <span>Status</span>
-                            <span className="table-head-sort">{getInventorySortMarker('inventoryLabel')}</span>
-                          </button>
-                        </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                        {INVENTORY_COLUMNS.filter((col) => visibleColumns.has(col.key)).map((col) => (
+                          <th key={col.key} className={col.isNum ? 'table-num' : ''}>
+                            <button
+                              type="button"
+                              className={`table-head-button ${col.isNum ? 'table-head-button-num' : ''}`}
+                              onClick={() => handleInventorySortChange(col.key)}
+                            >
+                              <span>{col.label}</span>
+                              <span className="table-head-sort">{getInventorySortMarker(col.key)}</span>
+                            </button>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
                       {visibleInventoryRows.map((row, index) => (
                         <tr key={`${row.itemType}-${row.itemName}-${index}`}>
-                          <td>{row.itemType || 'N/A'}</td>
-                          <td>{row.itemName || 'N/A'}</td>
-                          <td>{row.unit || 'N/A'}</td>
-                          <td>{row.itemDesc || 'N/A'}</td>
-                          <td>{row.brand || 'N/A'}</td>
-                          <td className="table-num">{formatMoney(row.defaultPrice)}</td>
-                          <td>{row.measurement || 'N/A'}</td>
-                          <td className="table-num">{formatQuantity(row.currentInv)}</td>
-                          <td>
-                            <div
-                              className="inventory-status-cell"
-                              title={getInventoryStatusHelp(row)}
-                              aria-label={getInventoryStatusHelp(row)}
-                            >
-                              <div className="inventory-status-track">
-                                <div
-                                  className={`inventory-status-fill ${row.inventoryBadge}`}
-                                  style={{ width: `${row.inventoryPct}%` }}
-                                />
-                              </div>
-                            </div>
-                          </td>
+                          {INVENTORY_COLUMNS.filter((col) => visibleColumns.has(col.key)).map((col) => {
+                            if (col.isStatus) {
+                              return (
+                                <td key={col.key}>
+                                  <div
+                                    className="inventory-status-cell"
+                                    title={getInventoryStatusHelp(row)}
+                                    aria-label={getInventoryStatusHelp(row)}
+                                  >
+                                    <div className="inventory-status-track">
+                                      <div
+                                        className={`inventory-status-fill ${row.inventoryBadge}`}
+                                        style={{ width: `${row.inventoryPct}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </td>
+                              );
+                            }
+                            if (col.key === 'defaultPrice') {
+                              return <td key={col.key} className="table-num">{formatMoney(row.defaultPrice)}</td>;
+                            }
+                            if (col.key === 'currentInv') {
+                              return <td key={col.key} className="table-num">{formatQuantity(row.currentInv)}</td>;
+                            }
+                            return (
+                              <td key={col.key} className={col.className || ''}>
+                                {row[col.key] || 'N/A'}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>

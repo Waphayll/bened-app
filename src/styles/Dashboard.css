@@ -521,11 +521,7 @@
   min-width: 100%;
 }
 
-.dashboard-row-three .panel {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
+
 
 /* ═══════════════════════════════════
    INVENTORY LIST
@@ -585,9 +581,10 @@
    ROW THREE
 ═══════════════════════════════════ */
 .dashboard-row-three .panel {
-  height: clamp(320px, 56vh, 520px);
+  max-height: 520px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ═══════════════════════════════════
@@ -597,17 +594,27 @@
   height: auto;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .sales-distribution-layout {
-  padding: 18px 24px 24px;
+  padding: 14px 20px 18px;
   flex: 1;
+  min-height: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
 }
 
 .sales-distribution-chart {
-  height: 260px;
+  height: 220px;
+  flex-shrink: 0;
   padding: 0;
+  margin: 0 auto;
+  max-width: 260px;
+  width: 100%;
 }
 
 .sales-distribution-meta {
@@ -615,14 +622,16 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  gap: 16px;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .sales-distribution-total {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-bottom: 2px;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .sales-distribution-label {
@@ -635,7 +644,7 @@
 
 .sales-distribution-total strong {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: var(--font-24);
+  font-size: var(--font-18);
   font-weight: 500;
   color: var(--green-deep);
 }
@@ -653,18 +662,22 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  flex: 1;
+  min-height: 0;
 }
 
 .sales-distribution-item {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
-  padding: 11px 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
   border: 1px solid var(--mist);
   background: #fafcfa;
+  flex-shrink: 0;
 }
 
 .sales-distribution-item-main {
@@ -683,8 +696,11 @@
 
 .sales-distribution-name {
   font-family: 'EB Garamond', Georgia, serif;
-  font-size: var(--font-14);
+  font-size: var(--font-13);
   color: var(--green-deep);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sales-distribution-item-values {
@@ -1101,19 +1117,22 @@
 .masterlist-grid-wrap {
   border: 1px solid #d5e0d5;
   background: linear-gradient(180deg, #fcfdfc 0%, #f7faf7 100%);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .masterlist-grid {
-  min-width: 1300px; /* Increased to allow wider cells */
-  table-layout: fixed;
+  min-width: 1200px;
+  table-layout: auto;
 }
 
 .masterlist-grid th,
 .masterlist-grid td {
-  padding: 10px 12px;
+  padding: 10px 14px;
   border: 1px solid #d5e0d5;
   font-size: var(--font-13);
   line-height: 1.35;
+  white-space: nowrap;
 }
 
 .masterlist-grid th {
@@ -1129,17 +1148,92 @@
   background: #e7f1e8;
 }
 
-.masterlist-grid td {
+/* Item Name + Description columns allow wrapping for long text */
+.masterlist-grid td.col-item-name,
+.masterlist-grid td.col-description {
   white-space: normal;
   word-break: break-word;
+  min-width: 180px;
 }
 
-.masterlist-grid th:nth-child(2) {
-  width: 25%;
+/* ── Column Toggle UI ── */
+.column-toggle-shell {
+  position: relative;
+  display: inline-block;
 }
 
-.masterlist-grid th:nth-child(4) {
-  width: 20%;
+.column-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--pale);
+  background: var(--white);
+  color: var(--green);
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: var(--font-9);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  min-height: 38px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.column-toggle-btn:hover {
+  border-color: var(--green);
+}
+
+.column-toggle-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  border: 1px solid var(--pale);
+  background: var(--white);
+  box-shadow: 0 12px 32px rgba(11, 30, 16, 0.14);
+  padding: 10px 0;
+}
+
+.column-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: var(--font-14);
+  color: var(--green-deep);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.column-toggle-option:hover {
+  background: #f3f8f3;
+}
+
+.column-toggle-check {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--pale);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--green);
+  background: var(--white);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.column-toggle-check.is-checked {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--white);
 }
 
 /* ═══════════════════════════════════
@@ -2181,7 +2275,8 @@
     padding-right: 16px;
   }
   .sales-distribution-chart {
-    height: 220px;
+    height: 180px;
+    max-width: 220px;
   }
   .summary-item {
     flex-wrap: wrap;
