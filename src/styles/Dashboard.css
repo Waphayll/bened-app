@@ -1385,6 +1385,44 @@
   position: relative;
 }
 
+.manual-combo-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+}
+
+.manual-combo-shell input {
+  border-right: none;
+}
+
+.manual-combo-toggle {
+  min-height: 50px;
+  border: 1px solid var(--pale);
+  background: var(--white);
+  color: var(--green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+
+.manual-combo-toggle:hover {
+  border-color: var(--green);
+  color: var(--green-deep);
+  background: #f7faf7;
+}
+
+.manual-combo-toggle:focus-visible {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(45, 110, 62, 0.14);
+}
+
+.manual-combo-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
 .manual-item-field-wide {
   grid-column: span 2;
 }

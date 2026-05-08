@@ -1861,6 +1861,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   const [chartPeriod, setChartPeriod] = useState('H1');
   const [summaryFilter, setSummaryFilter] = useState('All');
   const [salesTableDateFilter, setSalesTableDateFilter] = useState('all');
+  const [activeManualTypeSearchRowId, setActiveManualTypeSearchRowId] = useState(null);
   const [activeManualSearchRowId, setActiveManualSearchRowId] = useState(null);
 
   const dropdownRef = useRef(null);
@@ -2352,6 +2353,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   const openReceiptModal = () => {
     setDropdownOpen(false);
     setReceiptDraft(createReceiptDraft(displayName));
+    setActiveManualTypeSearchRowId(null);
     setActiveManualSearchRowId(null);
     setOrderFormError('');
     setReceiptUploadError('');
@@ -2361,6 +2363,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
 
   const closeReceiptModal = () => {
     setIsReceiptModalOpen(false);
+    setActiveManualTypeSearchRowId(null);
     setActiveManualSearchRowId(null);
     setOrderFormError('');
     setReceiptUploadError('');
@@ -2382,15 +2385,22 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   };
 
   const handleManualItemTypeChange = (rowId, itemType) => {
+    const exactMatch = findExactManualItemOption(itemTypeOptions, itemType);
     updateManualRow(rowId, {
-      itemType,
+      itemType: exactMatch || itemType,
       itemName: '',
       unit: UNSET_MANUAL_VARIANT_VALUE,
       itemDesc: UNSET_MANUAL_VARIANT_VALUE,
       brand: UNSET_MANUAL_VARIANT_VALUE,
       price: '',
     });
-    setActiveManualSearchRowId(rowId);
+    setActiveManualTypeSearchRowId(rowId);
+    setActiveManualSearchRowId(null);
+  };
+
+  const handleManualItemTypeSelect = (rowId, itemType) => {
+    handleManualItemTypeChange(rowId, itemType);
+    setActiveManualTypeSearchRowId(null);
   };
 
   const handleManualItemNameChange = (rowId, itemName) => {
@@ -2464,6 +2474,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   };
 
   const removeManualRow = (rowId) => {
+    setActiveManualTypeSearchRowId((current) => (current === rowId ? null : current));
     setActiveManualSearchRowId((current) => (current === rowId ? null : current));
     setReceiptDraft((prev) => {
       if (prev.manualRows.length === 1) return prev;
@@ -2589,14 +2600,20 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
     const normalizedRows = receiptDraft.manualRows
       .map((row, index) => {
         const quantity = Number(row.quantity);
-        const itemOptions = manualItemOptionsByType.get(row.itemType) || [];
+        const exactItemType = findExactManualItemOption(itemTypeOptions, row.itemType);
+        const itemOptions = manualItemOptionsByType.get(exactItemType) || [];
         const exactItemName = findExactManualItemOption(itemOptions, row.itemName);
-        const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, exactItemName)) || [];
+        const variants = manualVariantsByItemKey.get(buildInventoryKey(exactItemType, exactItemName)) || [];
         const matchingVariants = getMatchingManualVariants(variants, row);
         const selectedVariant = resolveExactManualVariant(variants, row);
 
         if (!row.itemType || !row.itemName) {
           manualErrors.push(`Row ${index + 1}: select both an item type and item name.`);
+          return null;
+        }
+
+        if (!exactItemType) {
+          manualErrors.push(`Row ${index + 1}: choose an exact item type from the search results.`);
           return null;
         }
 
@@ -3674,8 +3691,11 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
 
                 <div className="order-item-list">
                   {receiptDraft.manualRows.map((row, index) => {
-                    const itemOptions = manualItemOptionsByType.get(row.itemType) || [];
-                    const variants = manualVariantsByItemKey.get(buildInventoryKey(row.itemType, row.itemName)) || [];
+                    const exactItemType = findExactManualItemOption(itemTypeOptions, row.itemType);
+                    const itemTypeSearchResults = getManualItemSearchResults(itemTypeOptions, row.itemType);
+                    const showTypeSearchPanel = activeManualTypeSearchRowId === row.id;
+                    const itemOptions = manualItemOptionsByType.get(exactItemType) || [];
+                    const variants = manualVariantsByItemKey.get(buildInventoryKey(exactItemType, row.itemName)) || [];
                     const matchingVariants = getMatchingManualVariants(variants, row);
                     const selectedVariant = resolveExactManualVariant(variants, row);
                     const unitOptions = getVariantFieldOptions(variants, 'unit', row);
@@ -3716,19 +3736,94 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                         </div>
 
                         <div className="manual-item-grid">
-                          <label className="manual-item-field">
-                            <span className="manual-item-label">Item Type</span>
-                            <select
-                              value={row.itemType}
-                              onChange={(event) => handleManualItemTypeChange(row.id, event.target.value)}
-                              required
-                            >
-                              <option value="">Select type</option>
-                              {itemTypeOptions.map((itemType) => (
-                                <option key={itemType} value={itemType}>{itemType}</option>
-                              ))}
-                            </select>
-                          </label>
+                          <div className="manual-item-field manual-item-field-search">
+                            <label className="manual-item-label" htmlFor={`manual-item-type-${row.id}`}>Item Type</label>
+                            <div className="manual-combo-shell">
+                              <input
+                                id={`manual-item-type-${row.id}`}
+                                type="search"
+                                value={row.itemType}
+                                onChange={(event) => handleManualItemTypeChange(row.id, event.target.value)}
+                                onFocus={() => {
+                                  setActiveManualTypeSearchRowId(row.id);
+                                  setActiveManualSearchRowId(null);
+                                }}
+                                onBlur={() => {
+                                  window.setTimeout(() => {
+                                    setActiveManualTypeSearchRowId((current) => (
+                                      current === row.id ? null : current
+                                    ));
+                                  }, 100);
+                                }}
+                                placeholder="Type or browse item types"
+                                autoComplete="off"
+                                spellCheck="false"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded={showTypeSearchPanel}
+                                aria-controls={`manual-item-type-results-${row.id}`}
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="manual-combo-toggle"
+                                aria-label="Show item type suggestions"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                  setActiveManualSearchRowId(null);
+                                  setActiveManualTypeSearchRowId((current) => (
+                                    current === row.id ? null : row.id
+                                  ));
+                                }}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                              </button>
+                            </div>
+                            {showTypeSearchPanel && (
+                              <div
+                                className="manual-item-search-results"
+                                id={`manual-item-type-results-${row.id}`}
+                                role="listbox"
+                              >
+                                {itemTypeSearchResults.length > 0 ? (
+                                  <>
+                                    <div className="manual-item-search-meta">
+                                      {row.itemType
+                                        ? `${itemTypeSearchResults.length.toLocaleString()} match${itemTypeSearchResults.length === 1 ? '' : 'es'}`
+                                        : `Showing ${itemTypeSearchResults.length.toLocaleString()} item type suggestion${itemTypeSearchResults.length === 1 ? '' : 's'}`}
+                                    </div>
+                                    {itemTypeSearchResults.map((itemType) => {
+                                      const typeItemCount = manualItemOptionsByType.get(itemType)?.length || 0;
+                                      return (
+                                        <button
+                                          key={`${row.id}-item-type-${itemType}`}
+                                          type="button"
+                                          className="manual-item-search-option"
+                                          role="option"
+                                          aria-selected={normalizeLookup(row.itemType) === normalizeLookup(itemType)}
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            handleManualItemTypeSelect(row.id, itemType);
+                                          }}
+                                        >
+                                          <span className="manual-item-search-name">{itemType}</span>
+                                          <span className="manual-item-search-status">
+                                            {`${typeItemCount.toLocaleString()} item${typeItemCount === 1 ? '' : 's'}`}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </>
+                                ) : (
+                                  <div className="manual-item-search-empty">
+                                    No matching item types were found for this search.
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
                           <div className="manual-item-field manual-item-field-wide manual-item-field-search">
                             <label className="manual-item-label" htmlFor={`manual-item-name-${row.id}`}>Item Name</label>
@@ -3740,7 +3835,8 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                               value={row.itemName}
                               onChange={(event) => handleManualItemNameChange(row.id, event.target.value)}
                               onFocus={() => {
-                                if (row.itemType) {
+                                if (exactItemType) {
+                                  setActiveManualTypeSearchRowId(null);
                                   setActiveManualSearchRowId(row.id);
                                 }
                               }}
@@ -3751,7 +3847,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                                   ));
                                 }, 100);
                               }}
-                              placeholder={row.itemType ? 'Type to search item name' : 'Select item type first'}
+                              placeholder={exactItemType ? 'Type to search item name' : 'Select item type first'}
                               autoComplete="off"
                               spellCheck="false"
                               role="combobox"
@@ -3759,7 +3855,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                               aria-expanded={showSearchPanel}
                               aria-controls={`manual-item-search-results-${row.id}`}
                               required
-                              disabled={!row.itemType}
+                              disabled={!exactItemType}
                             />
                             {showSearchPanel && (
                               <div
