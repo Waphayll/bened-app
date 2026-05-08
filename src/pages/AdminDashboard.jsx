@@ -1061,11 +1061,6 @@ export default function AdminDashboard() {
 
       <footer className="dash-footer">
         <span>made by Bleza, Peria, Tizon for Bened Hardware</span>
-        <nav>
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Use</a>
-          <a href="#">Accessibility</a>
-        </nav>
       </footer>
     </>
   );

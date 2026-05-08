@@ -166,11 +166,6 @@ export default function Login() {
       {/* BOTTOM BAR */}
       <footer className="bottombar">
         <span className="bottombar-left">made by Bleza, Peria, Tizon for Bened Hardware</span>
-        <nav className="bottombar-center">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Use</a>
-          <a href="#">Accessibility</a>
-        </nav>
       </footer>
 
     </div>

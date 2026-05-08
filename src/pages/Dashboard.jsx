@@ -72,10 +72,10 @@ const SALES_TARGET_PERIOD_META = {
   },
 };
 const PRODUCT_BAR_COLORS = [
-  '#1b4332', '#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7', '#d8f3dc',
-  '#081c15', '#004b23', '#006400', '#007200', '#008000', '#38b000', '#70e000', '#9ef01a',
-  '#ccff33', '#a7c957', '#6a994e', '#386641', '#31572c', '#4f772d', '#90a955', '#ecf39e',
-  '#c2c5aa', '#a4ac86'
+  '#1b4332', '#2d6a4f', '#e9c46a', '#f4a261', '#e76f51', '#40916c', '#52b788', '#2a9d8f',
+  '#264653', '#d4a373', '#74c69d', '#95d5b2', '#e07a5f', '#8ab17d', '#3d405b', '#b7e4c7',
+  '#b5838d', '#d8f3dc', '#c08457', '#6d6875', '#081c15', '#004b23', '#ffb4a2', '#a7c957',
+  '#6a994e', '#386641'
 ];
 const MANUAL_VARIANT_FIELDS = ['unit', 'itemDesc', 'brand'];
 const MANUAL_VARIANT_AUTOFILL_ORDER = ['itemDesc', 'unit', 'brand'];
@@ -3637,11 +3637,6 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
 
       <footer className="dash-footer">
         <span>made by Bleza, Peria, Tizon for Bened Hardware</span>
-        <nav>
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Use</a>
-          <a href="#">Accessibility</a>
-        </nav>
       </footer>
 
       {isReceiptModalOpen && (
