@@ -86,7 +86,7 @@ const SALES_TABLE_FILTER_OPTIONS = [
 ];
 const INVENTORY_PAGE_SIZE_OPTIONS = [50, 100, 250];
 const DASHBOARD_NAV_ITEMS = ['Dashboard', 'Sales', 'Inventory'];
-const USER_NAV_ITEMS = ['Inventory', 'Sales'];
+const USER_NAV_ITEMS = ['Dashboard', 'Inventory'];
 const NAV_VIEW_ROUTE_MAP = {
   Dashboard: '/dashboard',
   Sales: '/sales',
