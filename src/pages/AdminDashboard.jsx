@@ -1060,7 +1060,7 @@ export default function AdminDashboard() {
       </main>
 
       <footer className="dash-footer">
-        <span>© 2026 Bened Industrial Group</span>
+        <span>made by Bleza, Peria, Tizon for Bened Hardware</span>
         <nav>
           <a href="#">Privacy Policy</a>
           <a href="#">Terms of Use</a>

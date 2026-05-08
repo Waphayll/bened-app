@@ -71,7 +71,12 @@ const SALES_TARGET_PERIOD_META = {
     scopeLabel: 'This month',
   },
 };
-const PRODUCT_BAR_COLORS = ['#2d6e3e', '#e9c46a', '#e76f51', '#2a9d8f', '#f4a261', '#264653', '#8ab17d', '#b5838d'];
+const PRODUCT_BAR_COLORS = [
+  '#1b4332', '#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2', '#b7e4c7', '#d8f3dc',
+  '#081c15', '#004b23', '#006400', '#007200', '#008000', '#38b000', '#70e000', '#9ef01a',
+  '#ccff33', '#a7c957', '#6a994e', '#386641', '#31572c', '#4f772d', '#90a955', '#ecf39e',
+  '#c2c5aa', '#a4ac86'
+];
 const MANUAL_VARIANT_FIELDS = ['unit', 'itemDesc', 'brand'];
 const MANUAL_VARIANT_AUTOFILL_ORDER = ['itemDesc', 'unit', 'brand'];
 const UNSET_MANUAL_VARIANT_VALUE = '__unset_manual_variant__';
@@ -3631,7 +3636,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
       </main>
 
       <footer className="dash-footer">
-        <span>© 2026 Bened Industrial Group</span>
+        <span>made by Bleza, Peria, Tizon for Bened Hardware</span>
         <nav>
           <a href="#">Privacy Policy</a>
           <a href="#">Terms of Use</a>
