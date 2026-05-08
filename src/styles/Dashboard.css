@@ -1,3 +1,8 @@
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 /* ═══════════════════════════════════
    TOP NAV
 ═══════════════════════════════════ */
@@ -581,6 +586,7 @@
   height: var(--row-two-panel-height);
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .dashboard-row-two .chart-area {
@@ -1047,8 +1053,8 @@
 
 .inventory-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
 }
 
@@ -1170,6 +1176,8 @@
 
 .data-table-wrap {
   overflow: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
@@ -2383,7 +2391,7 @@
   }
 
   .inventory-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .inventory-sidebar {
@@ -2407,7 +2415,7 @@
   }
 
   .order-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .manual-item-grid {
@@ -2542,7 +2550,7 @@
   }
 
   .order-item-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .order-modal-actions {
