@@ -2698,7 +2698,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   };
 
   const openReportWindow = (title, contentHtml) => {
-    const reportWindow = window.open('', '_blank', 'noopener,noreferrer');
+    const reportWindow = window.open('', '_blank');
     if (!reportWindow) {
       window.alert('Please allow pop-ups so the PDF report can open.');
       return;
