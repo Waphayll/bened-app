@@ -71,7 +71,7 @@ const SALES_TARGET_PERIOD_META = {
     scopeLabel: 'This month',
   },
 };
-const PRODUCT_BAR_COLORS = ['#2d6e3e', '#3a8f50', '#4db368', '#8aab8a', '#d0ddd0'];
+const PRODUCT_BAR_COLORS = ['#2d6e3e', '#e9c46a', '#e76f51', '#2a9d8f', '#f4a261', '#264653', '#8ab17d', '#b5838d'];
 const MANUAL_VARIANT_FIELDS = ['unit', 'itemDesc', 'brand'];
 const MANUAL_VARIANT_AUTOFILL_ORDER = ['itemDesc', 'unit', 'brand'];
 const UNSET_MANUAL_VARIANT_VALUE = '__unset_manual_variant__';
