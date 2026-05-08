@@ -1843,7 +1843,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   const [activeNav, setActiveNav] = useState(() => resolveAccessibleView(initialView, Boolean(user?.isAdmin)));
   const [activeTab, setActiveTab] = useState('Revenue');
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptDraft, setReceiptDraft] = useState(() => createReceiptDraft('User'));
   const [orderFeedback, setOrderFeedback] = useState('');
@@ -1864,7 +1864,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   const [activeManualSearchRowId, setActiveManualSearchRowId] = useState(null);
 
   const dropdownRef = useRef(null);
-  const exportMenuRef = useRef(null);
+
   const receiptInputRef = useRef(null);
   const salesChartPanelRef = useRef(null);
   const productChartPanelRef = useRef(null);
@@ -2237,7 +2237,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
       ? 'Spreadsheet-style master list joined with quantities from the Appwrite inventory table'
       : `Live operating snapshot · ${currentYear}`;
 
-  const showReceiptActions = activeNav === 'Sales';
+  const showReceiptActions = true;
 
   const cycleSalesTargetPeriod = () => {
     setSalesTargetPeriod((current) => getNextSalesTargetPeriod(current));
@@ -2255,9 +2255,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
-        setExportMenuOpen(false);
-      }
+
     };
 
     document.addEventListener('mousedown', handler);
@@ -2741,7 +2739,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   };
 
   const handleExportBiReport = () => {
-    setExportMenuOpen(false);
+
 
     const chartCards = [
       {
@@ -2972,27 +2970,13 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
         </div>
         <div className="header-actions d-flex flex-column flex-sm-row">
           {activeNav === 'Dashboard' && (
-            <div className="export-menu-shell" ref={exportMenuRef}>
-              <button
-                type="button"
-                className="btn-outline export-menu-trigger"
-                onClick={() => setExportMenuOpen((current) => !current)}
-                aria-expanded={exportMenuOpen}
-                aria-haspopup="menu"
-              >
-                Export Report
-              </button>
-              {exportMenuOpen && (
-                <div className="export-menu-dropdown" role="menu">
-                  <button type="button" className="dropdown-item" role="menuitem" onClick={handleExportBiReport}>
-                    BI Report (PDF)
-                  </button>
-                  <button type="button" className="dropdown-item" role="menuitem" onClick={handleExportMonthlyReport}>
-                    Monthly Report (PDF)
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={handleExportBiReport}
+            >
+              Export Report
+            </button>
           )}
           {showReceiptActions && (
             <button type="button" className="btn-solid" onClick={openReceiptModal}>Input Receipt</button>

@@ -1104,7 +1104,7 @@
 }
 
 .masterlist-grid {
-  min-width: 1160px;
+  min-width: 1300px; /* Increased to allow wider cells */
   table-layout: fixed;
 }
 
@@ -1130,7 +1130,16 @@
 }
 
 .masterlist-grid td {
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.masterlist-grid th:nth-child(2) {
+  width: 25%;
+}
+
+.masterlist-grid th:nth-child(4) {
+  width: 20%;
 }
 
 /* ═══════════════════════════════════
