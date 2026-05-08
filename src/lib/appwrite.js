@@ -7,7 +7,7 @@ import {
   TablesDB,
 } from 'appwrite';
 
-const endpoint = 'https://raf-debian.tail848565.ts.net/v1';
+const endpoint = 'https://raf-debian-1.tail848565.ts.net/v1';
 const projectId = '69cd11c7003ce3f9532f';
 const dataDatabaseId = (
   import.meta.env.VITE_APPWRITE_DATA_DB_ID
