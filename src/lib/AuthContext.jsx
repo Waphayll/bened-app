@@ -28,31 +28,16 @@ const adminEmails = new Set(
 );
 const adminUserIds = parseEnvList(import.meta.env.VITE_ADMIN_USER_IDS || '');
 
-function normalizeRoleValue(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
-}
-
 function isAdminAccount(account) {
   const email = String(account?.email || '').trim().toLowerCase();
   const userId = String(account?.$id || '').trim();
+  // account.labels is server-set only (not user-writable like account.prefs)
   const labels = Array.isArray(account?.labels) ? account.labels : [];
-  const prefs = account?.prefs && typeof account.prefs === 'object' ? account.prefs : {};
-  const roles = Array.isArray(prefs.roles)
-    ? prefs.roles
-    : prefs.roles
-      ? [prefs.roles]
-      : [];
-  const preferenceLabels = Array.isArray(prefs.labels) ? prefs.labels : [];
-  const adminSignals = [prefs.role, ...roles, ...labels, ...preferenceLabels];
 
   return (
     adminEmails.has(email)
     || adminUserIds.has(userId)
-    || prefs.isAdmin === true
-    || adminSignals.some((value) => normalizeRoleValue(value) === 'admin')
+    || labels.some((label) => String(label).trim().toLowerCase() === 'admin')
   );
 }
 
