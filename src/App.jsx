@@ -29,7 +29,7 @@ function RouteLoading() {
 }
 
 function getDefaultRoute(user) {
-  return user?.isAdmin ? '/admin' : '/inventory';
+  return user?.isAdmin ? '/admin' : '/dashboard';
 }
 
 function WorkspaceRoute({ view }) {
@@ -40,9 +40,6 @@ function WorkspaceRoute({ view }) {
     return <AppLoader title="Loading Workspace" subtitle="Fetching receipts, inventory, and masterlist data..." />;
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.isAdmin && view === 'Dashboard') {
-    return <Navigate to="/inventory" replace />;
-  }
   return <Dashboard initialView={view} />;
 }
 

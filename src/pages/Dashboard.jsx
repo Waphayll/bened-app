@@ -1746,7 +1746,7 @@ function SalesChart({ mode, labels, dataSeries }) {
   return <Line data={chartData} options={options} />;
 }
 
-function CategorySalesPieChart({ categories }) {
+function CategorySalesPieChart({ categories, hideRevenue = false }) {
   const data = {
     labels: categories.map((category) => category.name),
     datasets: [{
@@ -1774,6 +1774,7 @@ function CategorySalesPieChart({ categories }) {
           label: (ctx) => {
             const category = categories[ctx.dataIndex];
             if (!category) return '';
+            if (hideRevenue) return ` ${category.shareOfTotal.toFixed(1)}%`;
             return ` ${formatMoney(category.revenue)} (${category.shareOfTotal.toFixed(1)}%)`;
           },
         },
@@ -1844,9 +1845,10 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
     refreshInventoryData,
   } = useAppData();
   const navigate = useNavigate();
+  const isAdmin = Boolean(user?.isAdmin);
 
-  const [activeNav, setActiveNav] = useState(() => resolveAccessibleView(initialView, Boolean(user?.isAdmin)));
-  const [activeTab, setActiveTab] = useState('Revenue');
+  const [activeNav, setActiveNav] = useState(() => resolveAccessibleView(initialView, isAdmin));
+  const [activeTab, setActiveTab] = useState(() => isAdmin ? 'Revenue' : 'Orders');
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -1869,9 +1871,11 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   const [activeManualTypeSearchRowId, setActiveManualTypeSearchRowId] = useState(null);
   const [activeManualSearchRowId, setActiveManualSearchRowId] = useState(null);
   const [columnToggleOpen, setColumnToggleOpen] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState(() => new Set([
-    'itemType', 'itemName', 'unit', 'brand', 'defaultPrice', 'currentInv', 'inventoryLabel',
-  ]));
+  const [visibleColumns, setVisibleColumns] = useState(() => new Set(
+    isAdmin
+      ? ['itemType', 'itemName', 'unit', 'brand', 'defaultPrice', 'currentInv', 'inventoryLabel']
+      : ['itemType', 'itemName', 'unit', 'brand', 'currentInv', 'inventoryLabel'],
+  ));
 
   const INVENTORY_COLUMNS = useMemo(() => [
     { key: 'itemType', label: 'Category', className: '', alwaysVisible: false },
@@ -1879,11 +1883,11 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
     { key: 'unit', label: 'Item Unit', className: '', alwaysVisible: false },
     { key: 'itemDesc', label: 'Description', className: 'col-description', alwaysVisible: false },
     { key: 'brand', label: 'Brand', className: '', alwaysVisible: false },
-    { key: 'defaultPrice', label: 'Price', className: '', isNum: true, alwaysVisible: false },
+    ...(isAdmin ? [{ key: 'defaultPrice', label: 'Price', className: '', isNum: true, alwaysVisible: false }] : []),
     { key: 'measurement', label: 'Measure', className: '', alwaysVisible: false },
     { key: 'currentInv', label: 'Current Qty', className: '', isNum: true, alwaysVisible: false },
     { key: 'inventoryLabel', label: 'Status', className: '', alwaysVisible: false, isStatus: true },
-  ], []);
+  ], [isAdmin]);
 
   const dropdownRef = useRef(null);
   const columnToggleRef = useRef(null);
@@ -1979,13 +1983,16 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
     })
   ), [inventoryTableRows, productPerformance, receiptRows, salesByCategory]);
 
+  const MONETARY_SUMMARY_IDS = useMemo(() => new Set(['today-sales', 'weekly-quota', 'top-category']), []);
+
   const filteredQuickSummaryItems = useMemo(() => (
     quickSummaryItems.filter((item) => {
+      if (!isAdmin && MONETARY_SUMMARY_IDS.has(item.id)) return false;
       if (summaryFilter === 'All') return true;
       if (summaryFilter === 'Alerts') return item.tone === 'alert' || item.tone === 'warning';
       return item.group === summaryFilter;
     })
-  ), [quickSummaryItems, summaryFilter]);
+  ), [isAdmin, MONETARY_SUMMARY_IDS, quickSummaryItems, summaryFilter]);
 
   const inventoryOverview = useMemo(() => (
     deriveInventoryOverview(inventoryRows)
@@ -2245,20 +2252,24 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   }, [chartLabels, displayedOrderCounts, displayedRevenue, lowStockRows, productPerformance, salesByCategory]);
 
   const navItems = useMemo(() => (
-    getAccessibleNavItems(Boolean(user?.isAdmin))
+    getAccessibleNavItems(isAdmin)
   ), [user?.isAdmin]);
 
   const pageTitle = activeNav === 'Sales'
     ? 'Sales'
     : activeNav === 'Inventory'
       ? 'Inventory'
-      : 'Sales & Inventory Overview';
+      : isAdmin
+        ? 'Sales & Inventory Overview'
+        : 'Inventory & Orders Overview';
 
   const pageSubtitle = activeNav === 'Sales'
     ? 'Receipt rows from the Appwrite receipts table'
     : activeNav === 'Inventory'
       ? 'Spreadsheet-style master list joined with quantities from the Appwrite inventory table'
-      : `Live operating snapshot · ${currentYear}`;
+      : isAdmin
+        ? `Live operating snapshot · ${currentYear}`
+        : `Stock levels and order activity · ${currentYear}`;
 
   const showReceiptActions = true;
 
@@ -2268,7 +2279,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
 
   const handleQuickSummaryAction = (nextView) => {
     if (!nextView) return;
-    const resolvedView = resolveAccessibleView(nextView, Boolean(user?.isAdmin));
+    const resolvedView = resolveAccessibleView(nextView, isAdmin);
     setActiveNav(resolvedView);
     navigate(NAV_VIEW_ROUTE_MAP[resolvedView] || '/inventory');
   };
@@ -2314,7 +2325,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   }, [displayName]);
 
   useEffect(() => {
-    const nextView = resolveAccessibleView(initialView, Boolean(user?.isAdmin));
+    const nextView = resolveAccessibleView(initialView, isAdmin);
     setActiveNav((current) => (current === nextView ? current : nextView));
   }, [initialView, user?.isAdmin]);
 
@@ -2334,7 +2345,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
   };
 
   const handleNavChange = (nextView) => {
-    const resolvedView = resolveAccessibleView(nextView, Boolean(user?.isAdmin));
+    const resolvedView = resolveAccessibleView(nextView, isAdmin);
     setActiveNav(resolvedView);
     setDropdownOpen(false);
     setExportMenuOpen(false);
@@ -3035,7 +3046,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
           {orderFeedback && <p className="order-feedback">{orderFeedback}</p>}
         </div>
         <div className="header-actions d-flex flex-column flex-sm-row">
-          {activeNav === 'Dashboard' && (
+          {activeNav === 'Dashboard' && isAdmin && (
             <button
               type="button"
               className="btn-outline"
@@ -3069,58 +3080,102 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
         {activeNav === 'Dashboard' && (
           <>
             <section className="row g-2 dashboard-kpi-strip">
-              <div className="col-12 col-md-6 col-xl-3">
-                <div className="kpi-card h-100" style={{ '--delay': '0.05s' }}>
-                  <div className="kpi-label">Total Revenue</div>
-                  <div className="kpi-value">{formatMoney(totalRevenue)}</div>
-                  <div className="kpi-delta positive">Based on receipt rows in the database</div>
-                </div>
-              </div>
-
-              <div className="col-12 col-md-6 col-xl-3">
-                <div className="kpi-card h-100" style={{ '--delay': '0.1s' }}>
-                  <div className="kpi-label">Orders Fulfilled</div>
-                  <div className="kpi-value">{totalOrdersInGraphWindow.toLocaleString()}</div>
-                  <div className="kpi-delta positive">{`Based on receipt rows for ${chartRange.label} ${currentYear}`}</div>
-                </div>
-              </div>
-
-              <div className="col-12 col-md-6 col-xl-3">
-                <button
-                  type="button"
-                  className="kpi-card kpi-card-button h-100"
-                  style={{ '--delay': '0.15s' }}
-                  onClick={cycleSalesTargetPeriod}
-                  aria-label={`Sales target card showing ${salesTargetMetrics.badge.toLowerCase()} quota. Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
-                  title={`Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
-                >
-                  <div className="kpi-card-head">
-                    <div className="kpi-label">Sales Target</div>
-                    <span className="kpi-chip">{salesTargetMetrics.badge}</span>
+              {isAdmin ? (
+                <>
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.05s' }}>
+                      <div className="kpi-label">Total Revenue</div>
+                      <div className="kpi-value">{formatMoney(totalRevenue)}</div>
+                      <div className="kpi-delta positive">Based on receipt rows in the database</div>
+                    </div>
                   </div>
-                  <div className="kpi-value">{salesTargetMetrics.progressPct.toFixed(1)}%</div>
-                  <div className={`kpi-delta ${salesTargetMetrics.tone}`}>{salesTargetMetrics.summary}</div>
-                  <div className="kpi-progress">
-                    <div
-                      className="kpi-progress-bar"
-                      style={{ width: `${salesTargetMetrics.progressBarPct}%` }}
-                    />
-                  </div>
-                  <div className="kpi-note">{salesTargetMetrics.note}</div>
-                </button>
-              </div>
 
-              <div className="col-12 col-md-6 col-xl-3">
-                <div className="kpi-card h-100" style={{ '--delay': '0.2s' }}>
-                  <div className="kpi-label">Total SKUs in Stock</div>
-                  <div className="kpi-value">{inventoryOverview.totalSkusInStock.toLocaleString()}</div>
-                  <div className={`kpi-delta ${inventoryOverview.lowStockAlertCount > 0 ? 'negative' : 'positive'}`}>
-                    {inventoryOverview.lowStockAlertCount > 0
-                      ? `▼ ${inventoryOverview.lowStockAlertCount} low-stock alert${inventoryOverview.lowStockAlertCount === 1 ? '' : 's'}`
-                      : `Based on ${inventoryOverview.trackedSkuCount.toLocaleString()} tracked SKU${inventoryOverview.trackedSkuCount === 1 ? '' : 's'} in the database`}
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.1s' }}>
+                      <div className="kpi-label">Orders Fulfilled</div>
+                      <div className="kpi-value">{totalOrdersInGraphWindow.toLocaleString()}</div>
+                      <div className="kpi-delta positive">{`Based on receipt rows for ${chartRange.label} ${currentYear}`}</div>
+                    </div>
                   </div>
-                </div>
-              </div>
+
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <button
+                      type="button"
+                      className="kpi-card kpi-card-button h-100"
+                      style={{ '--delay': '0.15s' }}
+                      onClick={cycleSalesTargetPeriod}
+                      aria-label={`Sales target card showing ${salesTargetMetrics.badge.toLowerCase()} quota. Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
+                      title={`Click to switch to ${salesTargetMetrics.nextBadge.toLowerCase()} quota.`}
+                    >
+                      <div className="kpi-card-head">
+                        <div className="kpi-label">Sales Target</div>
+                        <span className="kpi-chip">{salesTargetMetrics.badge}</span>
+                      </div>
+                      <div className="kpi-value">{salesTargetMetrics.progressPct.toFixed(1)}%</div>
+                      <div className={`kpi-delta ${salesTargetMetrics.tone}`}>{salesTargetMetrics.summary}</div>
+                      <div className="kpi-progress">
+                        <div
+                          className="kpi-progress-bar"
+                          style={{ width: `${salesTargetMetrics.progressBarPct}%` }}
+                        />
+                      </div>
+                      <div className="kpi-note">{salesTargetMetrics.note}</div>
+                    </button>
+                  </div>
+
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.2s' }}>
+                      <div className="kpi-label">Total SKUs in Stock</div>
+                      <div className="kpi-value">{inventoryOverview.totalSkusInStock.toLocaleString()}</div>
+                      <div className={`kpi-delta ${inventoryOverview.lowStockAlertCount > 0 ? 'negative' : 'positive'}`}>
+                        {inventoryOverview.lowStockAlertCount > 0
+                          ? `▼ ${inventoryOverview.lowStockAlertCount} low-stock alert${inventoryOverview.lowStockAlertCount === 1 ? '' : 's'}`
+                          : `Based on ${inventoryOverview.trackedSkuCount.toLocaleString()} tracked SKU${inventoryOverview.trackedSkuCount === 1 ? '' : 's'} in the database`}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.05s' }}>
+                      <div className="kpi-label">Receipt Rows</div>
+                      <div className="kpi-value">{receiptRows.length.toLocaleString()}</div>
+                      <div className="kpi-delta positive">Total receipt entries in the database</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.1s' }}>
+                      <div className="kpi-label">Orders Fulfilled</div>
+                      <div className="kpi-value">{totalOrdersInGraphWindow.toLocaleString()}</div>
+                      <div className="kpi-delta positive">{`Receipt rows for ${chartRange.label} ${currentYear}`}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.15s' }}>
+                      <div className="kpi-label">Low Stock Alerts</div>
+                      <div className="kpi-value">{lowStockRows.length.toLocaleString()}</div>
+                      <div className={`kpi-delta ${lowStockRows.length > 0 ? 'negative' : 'positive'}`}>
+                        {lowStockRows.length > 0
+                          ? `${lowStockRows.length} item${lowStockRows.length === 1 ? '' : 's'} below safe stock level`
+                          : 'All items above low-stock threshold'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6 col-xl-3">
+                    <div className="kpi-card h-100" style={{ '--delay': '0.2s' }}>
+                      <div className="kpi-label">Total SKUs in Stock</div>
+                      <div className="kpi-value">{inventoryOverview.totalSkusInStock.toLocaleString()}</div>
+                      <div className={`kpi-delta ${inventoryOverview.lowStockAlertCount > 0 ? 'negative' : 'positive'}`}>
+                        {`${inventoryOverview.trackedSkuCount.toLocaleString()} tracked SKU${inventoryOverview.trackedSkuCount === 1 ? '' : 's'} in the database`}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </section>
 
             <section className="row g-2 dashboard-row-two">
@@ -3128,9 +3183,9 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                 <div className="panel">
                   <div className="panel-header">
                     <div>
-                      <div className="panel-title">Monthly Sales Overview</div>
+                      <div className="panel-title">{isAdmin ? 'Monthly Sales Overview' : 'Monthly Orders Overview'}</div>
                       <div className="panel-sub">
-                        {activeTab === 'Revenue'
+                        {activeTab === 'Revenue' && isAdmin
                           ? `Revenue (₱) — ${chartRange.label} ${currentYear}`
                           : `Orders per month — ${chartRange.label} ${currentYear}`}
                       </div>
@@ -3146,25 +3201,27 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                           <option key={period} value={period}>{period}</option>
                         ))}
                       </select>
-                      <div className="panel-tabs">
-                        {['Revenue', 'Orders'].map((tab) => (
-                          <button
-                            type="button"
-                            key={tab}
-                            className={`tab ${activeTab === tab ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab)}
-                          >
-                            {tab}
-                          </button>
-                        ))}
-                      </div>
+                      {isAdmin && (
+                        <div className="panel-tabs">
+                          {['Revenue', 'Orders'].map((tab) => (
+                            <button
+                              type="button"
+                              key={tab}
+                              className={`tab ${activeTab === tab ? 'active' : ''}`}
+                              onClick={() => setActiveTab(tab)}
+                            >
+                              {tab}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="chart-area" ref={salesChartPanelRef}>
                     <SalesChart
-                      mode={activeTab}
+                      mode={isAdmin ? activeTab : 'Orders'}
                       labels={chartLabels}
-                      dataSeries={activeTab === 'Revenue' ? displayedRevenue : displayedOrderCounts}
+                      dataSeries={isAdmin && activeTab === 'Revenue' ? displayedRevenue : displayedOrderCounts}
                     />
                   </div>
                 </div>
@@ -3242,21 +3299,27 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                 <div className="panel panel-sales-distribution h-100">
                   <div className="panel-header">
                     <div>
-                      <div className="panel-title">Sales Distribution</div>
-                      <div className="panel-sub">Revenue share per category from the receipts database</div>
+                      <div className="panel-title">{isAdmin ? 'Sales Distribution' : 'Category Distribution'}</div>
+                      <div className="panel-sub">
+                        {isAdmin
+                          ? 'Revenue share per category from the receipts database'
+                          : 'Order share per category from the receipts database'}
+                      </div>
                     </div>
                   </div>
 
                   {salesByCategory.length > 0 ? (
                     <div className="sales-distribution-layout">
                       <div className="chart-area sales-distribution-chart" ref={categoryChartPanelRef}>
-                        <CategorySalesPieChart categories={salesByCategory} />
+                        <CategorySalesPieChart categories={salesByCategory} hideRevenue={!isAdmin} />
                       </div>
 
                       <div className="sales-distribution-meta">
                         <div className="sales-distribution-total">
-                          <span className="sales-distribution-label">Revenue</span>
-                          <strong>{formatMoney(totalRevenue)}</strong>
+                          <span className="sales-distribution-label">{isAdmin ? 'Revenue' : 'Categories'}</span>
+                          {isAdmin
+                            ? <strong>{formatMoney(totalRevenue)}</strong>
+                            : <strong>{salesByCategory.length}</strong>}
                           <span>· {salesByCategory.length} categor{salesByCategory.length === 1 ? 'y' : 'ies'}</span>
                         </div>
 
@@ -3268,7 +3331,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                                 <span className="sales-distribution-name">{category.name}</span>
                               </div>
                               <div className="sales-distribution-item-values">
-                                <span>{formatMoney(category.revenue)}</span>
+                                {isAdmin && <span>{formatMoney(category.revenue)}</span>}
                                 <span>{category.shareOfTotal.toFixed(1)}%</span>
                               </div>
                             </li>
@@ -3278,7 +3341,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                     </div>
                   ) : (
                     <div className="panel-empty-state">
-                      <p>{receiptError || 'No receipt revenue yet by category.'}</p>
+                      <p>{receiptError || (isAdmin ? 'No receipt revenue yet by category.' : 'No receipt data yet by category.')}</p>
                     </div>
                   )}
                 </div>
@@ -3297,7 +3360,7 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                   </div>
 
                   <div className="summary-toolbar">
-                    {QUICK_SUMMARY_FILTERS.map((filter) => (
+                    {(isAdmin ? QUICK_SUMMARY_FILTERS : QUICK_SUMMARY_FILTERS.filter((f) => f !== 'Sales')).map((filter) => (
                       <button
                         type="button"
                         key={filter}
@@ -4019,15 +4082,17 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                             </select>
                           </label>
 
-                          <label className="manual-item-field">
-                            <span className="manual-item-label">Price</span>
-                            <input
-                              type="text"
-                              value={row.price === '' || !Number.isFinite(priceValue) ? '' : priceValue.toFixed(2)}
-                              readOnly
-                              placeholder="Auto"
-                            />
-                          </label>
+                          {isAdmin && (
+                            <label className="manual-item-field">
+                              <span className="manual-item-label">Price</span>
+                              <input
+                                type="text"
+                                value={row.price === '' || !Number.isFinite(priceValue) ? '' : priceValue.toFixed(2)}
+                                readOnly
+                                placeholder="Auto"
+                              />
+                            </label>
+                          )}
 
                           <div
                             className={`manual-stock-panel ${availability.tone}`}
@@ -4039,11 +4104,13 @@ export default function Dashboard({ initialView = 'Dashboard' }) {
                             <span>{row.itemName ? availability.detail : 'Select an item to validate stock.'}</span>
                           </div>
 
-                          <div className="manual-total-panel">
-                            <span className="manual-item-label">Total</span>
-                            <strong>{formatMoney(rowTotal)}</strong>
-                            <span>Auto-calculated from price and quantity.</span>
-                          </div>
+                          {isAdmin && (
+                            <div className="manual-total-panel">
+                              <span className="manual-item-label">Total</span>
+                              <strong>{formatMoney(rowTotal)}</strong>
+                              <span>Auto-calculated from price and quantity.</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
