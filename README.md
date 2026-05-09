@@ -5,7 +5,7 @@ React + Vite frontend with a FastAPI OCR backend.
 ## Project Structure
 
 - Frontend: `src/`
-- Backend: `bakcend/main.py`
+- Backend: `initially bakcend/main.py but now deployed to home server`
 
 ## Frontend Setup
 
@@ -24,8 +24,8 @@ VITE_APPWRITE_PROJECT_ID=<YOUR_PROJECT_ID>
 
 3. Run the app:
 
-```bash
-npm run dev
+```vercel
+(https://bened-app.vercel.app/)
 ```
 
 ## Appwrite Notes
@@ -33,11 +33,3 @@ npm run dev
 - Login uses Appwrite email/password sessions.
 - In Appwrite Console, add your frontend origin (for example `http://localhost:5173`) as a Web platform for this project.
 - Make sure CORS/allowed domains include your local and deployed frontend URLs.
-
-## Backend
-
-Run the OCR API with your Python environment:
-
-```bash
-uvicorn bakcend.main:app --reload --port 8000
-```
